@@ -51,18 +51,21 @@ if (!(Test-Path $NodeBin)) {
     Write-Host "  Downloading $NodeUrl..."
     Invoke-WebRequest -Uri $NodeUrl -OutFile $TarXzPath -UseBasicParsing
 
-    # Extract .tar.xz — requires 7-Zip or tar
+    # Extract .tar.xz using Windows system tar (bsdtar) to avoid Git Bash tar path issues
     Write-Host "  Extracting Node.js binary..."
-    if (Get-Command "tar" -ErrorAction SilentlyContinue) {
-        # Windows 10+ has built-in tar
-        if (!(Test-Path $ExtractDir)) { New-Item -ItemType Directory -Path $ExtractDir | Out-Null }
-        tar -xf $TarXzPath -C $ExtractDir
-    } else {
-        throw "tar command not found. Install tar or 7-Zip to extract .tar.xz files."
+    $SystemTar = Join-Path $env:SystemRoot "System32\tar.exe"
+    if (!(Test-Path $SystemTar)) {
+        # Fallback: try tar from PATH but with explicit working directory
+        $SystemTar = "tar"
     }
+    if (!(Test-Path $ExtractDir)) { New-Item -ItemType Directory -Path $ExtractDir | Out-Null }
+    # Use Push-Location to avoid path format issues with tar -C flag
+    Push-Location $ExtractDir
+    & $SystemTar -xf $TarXzPath
+    Pop-Location
 
     # Find and copy the node binary
-    $NodeSrc = Get-ChildItem -Path $ExtractDir -Recurse -Filter "node" | Where-Object { $_.FullName -like "*bin/node" -or $_.FullName -like "*bin\node" } | Select-Object -First 1
+    $NodeSrc = Get-ChildItem -Path $ExtractDir -Recurse -Filter "node" | Where-Object { !$_.PSIsContainer -and ($_.FullName -like "*bin\node" -or $_.FullName -like "*bin/node") } | Select-Object -First 1
     if (!$NodeSrc) { throw "Could not find node binary in extracted archive" }
     Copy-Item $NodeSrc.FullName $NodeBin
 
