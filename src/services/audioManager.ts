@@ -18,6 +18,11 @@ let isPlaying = false;
 let currentVolume = 100;
 let connected = false;
 
+// Suppression window for local volume changes (ms).
+// WS echoes arriving within this window after a local change are ignored.
+const VOLUME_SUPPRESS_MS = 600;
+let lastLocalVolumeChangeAt = 0;
+
 // --- Listeners ---
 
 type TrackListener = (track: TrackInfo | null) => void;
@@ -90,6 +95,11 @@ function notifyPlayState(playing: boolean) {
 }
 
 function notifyVolume(vol: number) {
+  if (Date.now() - lastLocalVolumeChangeAt < VOLUME_SUPPRESS_MS) {
+    // A local Deck slider change happened recently — skip to avoid
+    // overwriting the user's more recent value with a stale echo.
+    return;
+  }
   setAudioVolume(vol);
   volumeListeners.forEach((fn) => fn(vol));
 }
@@ -203,7 +213,6 @@ function handleWsMessage(msg: { event: string; data: any }) {
       }
       notifyPlayState(msg.data.isPlaying);
       if (msg.data.volume !== undefined) {
-        setAudioVolume(msg.data.volume);
         notifyVolume(msg.data.volume);
       }
       break;
@@ -229,7 +238,6 @@ function handleWsMessage(msg: { event: string; data: any }) {
 
     case 'volume': {
       const level = msg.data.value ?? msg.data.level ?? 100;
-      setAudioVolume(level);
       notifyVolume(level);
       break;
     }
@@ -297,11 +305,14 @@ function onAudioPause() {
 
 // --- Audio volume ---
 
-export function setAudioVolume(level: number) {
+export function setAudioVolume(level: number, local: boolean = false) {
   if (audioElement) {
     audioElement.volume = Math.max(0, Math.min(1, level / 100));
   }
   currentVolume = level;
+  if (local) {
+    lastLocalVolumeChangeAt = Date.now();
+  }
 }
 
 // --- REST API helpers ---
