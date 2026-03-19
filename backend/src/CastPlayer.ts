@@ -194,6 +194,10 @@ export class CastPlayer extends Player {
         this.ws.broadcast('seek', { position });
       }
 
+      // Broadcast updated queue so the current track indicator moves
+      const queueData = this.getQueueWithMetadata();
+      this.ws.broadcast('queue', queueData);
+
       return true;
     } catch (err) {
       console.error(`[YTCast] doPlay failed for ${video.id}:`, (err as Error).message);
