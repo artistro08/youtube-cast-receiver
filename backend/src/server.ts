@@ -43,9 +43,23 @@ async function main() {
     dataStore,
   });
 
+  // Get or create a persistent UUID so the device looks the same across reinstalls
+  let ssdpUuid = await dataStore.get<string>('ssdp.uuid');
+  if (!ssdpUuid) {
+    const { randomUUID } = await import('node:crypto');
+    ssdpUuid = randomUUID();
+    await dataStore.set('ssdp.uuid', ssdpUuid);
+    console.log(`[YTCast] Generated new SSDP UUID: ${ssdpUuid}`);
+  } else {
+    console.log(`[YTCast] Using persisted SSDP UUID: ${ssdpUuid}`);
+  }
+
   // Create the YouTube Cast Receiver
   const deviceName = os.hostname();
   const receiver = new YouTubeCastReceiver(castPlayer, {
+    dial: {
+      uuid: ssdpUuid,
+    } as any,
     device: {
       name: deviceName,
       screenName: `YouTube on ${deviceName}`,
