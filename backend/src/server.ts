@@ -1,7 +1,6 @@
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import YouTubeCastReceiver from 'yt-cast-receiver';
 import { CastPlayer } from './CastPlayer.js';
 import { JsonDataStore } from './JsonDataStore.js';
@@ -13,7 +12,8 @@ const PORT = 39281;
 
 // Resolve paths relative to the plugin directory
 // When running via main.py, cwd is the plugin dir
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// esbuild defines __dirname for CJS bundles automatically
+declare const __dirname: string;
 const pluginDir = path.resolve(__dirname, '..', '..');
 const binDir = path.join(pluginDir, 'bin');
 const ytdlpPath = path.join(binDir, 'yt-dlp');
