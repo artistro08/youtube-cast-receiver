@@ -305,8 +305,10 @@ function onAudioEnded() {
 }
 
 function onAudioError() {
-  console.error('[YTCast] Audio element error');
-  sendWs('playbackError', { message: 'Audio playback error' });
+  const err = audioElement?.error;
+  const src = audioElement?.src ?? '(no src)';
+  console.error(`[YTCast] Audio element error: code=${err?.code} message="${err?.message}" src=${src.substring(0, 120)}`);
+  sendWs('playbackError', { message: `Audio playback error: ${err?.message ?? 'unknown'}` });
 }
 
 function onAudioPause() {
