@@ -64,7 +64,7 @@ export const VolumeSlider = () => {
     cachedVolume = val;
 
     // Set audio volume immediately — no round-trip delay
-    setAudioVolume(val);
+    setAudioVolume(val, true);
 
     // Debounce the backend API call
     if (debounceRef.current) clearTimeout(debounceRef.current);
