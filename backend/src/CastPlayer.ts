@@ -268,7 +268,6 @@ export class CastPlayer extends Player {
   }
 
   protected async doGetVolume(): Promise<Volume> {
-    console.log(`[YTCast] doGetVolume: ${this.currentVolume.level}`);
     return this.currentVolume;
   }
 

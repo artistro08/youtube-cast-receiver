@@ -28,7 +28,7 @@ let lastLocalVolumeChangeAt = 0;
 // causing ~200ms round-trip latency. The phone's YouTube app oscillates
 // ±3 levels when the ack arrives late. This debounce waits for the
 // oscillation to settle before applying the final value.
-const VOLUME_SETTLE_MS = 300;
+const VOLUME_SETTLE_MS = 150;
 let volumeSettleTimer: ReturnType<typeof setTimeout> | null = null;
 
 // --- Listeners ---
