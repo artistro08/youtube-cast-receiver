@@ -126,6 +126,18 @@ function connectWebSocket() {
   ws.onopen = () => {
     console.log('[YTCast] WebSocket connected');
     reconnectDelay = 1000;
+    // Fetch fresh state on reconnect
+    void apiGetState().then((state) => {
+      if (state) {
+        if (state.track) notifyTrack(state.track);
+        notifyPlayState(state.isPlaying ?? false);
+        notifyVolume(state.volume ?? 100);
+        notifyConnection(state.connected ?? false);
+      }
+    });
+    void apiGetQueue().then((data) => {
+      if (data) notifyQueue(data.tracks ?? [], data.position ?? -1);
+    });
   };
 
   ws.onmessage = (event) => {
