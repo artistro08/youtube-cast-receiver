@@ -77,6 +77,7 @@ async function main() {
     handleRequest(req, res, {
       castPlayer,
       libraryPlayer: castPlayer,
+      isConnected: () => receiver.getConnectedSenders().length > 0,
     });
   });
 
@@ -117,6 +118,7 @@ async function main() {
   playlist.on('videoAdded', broadcastQueue);
   playlist.on('videoRemoved', broadcastQueue);
   playlist.on('videoSelected', broadcastQueue);
+  playlist.on('playlistAdded', broadcastQueue);
 
   receiver.on('error', (error) => {
     console.error('[YTCast] Receiver error:', error);

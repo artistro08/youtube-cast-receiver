@@ -5,6 +5,7 @@ import type { Player as YtPlayer } from 'yt-cast-receiver';
 interface RouteContext {
   castPlayer: CastPlayer;
   libraryPlayer: YtPlayer;
+  isConnected: () => boolean;
 }
 
 type RouteHandler = (body: any, ctx: RouteContext) => Promise<unknown>;
@@ -18,7 +19,6 @@ const routes: Record<string, Record<string, RouteHandler>> = {
       const volume = await ctx.libraryPlayer.getVolume();
       const position = await ctx.libraryPlayer.getPosition();
       const duration = await ctx.libraryPlayer.getDuration();
-      const connected = ctx.libraryPlayer.getNavInfo(); // used to check if active
 
       return {
         track: trackInfo
@@ -34,7 +34,7 @@ const routes: Record<string, Record<string, RouteHandler>> = {
         volume: volume.level,
         position,
         duration,
-        connected: false, // Will be set by server.ts using receiver.getConnectedSenders()
+        connected: ctx.isConnected(),
       };
     },
 
@@ -43,7 +43,7 @@ const routes: Record<string, Record<string, RouteHandler>> = {
       const state = playlist.getState();
       const videoIds = playlist.videoIds;
 
-      const tracks = videoIds.map((id: string, index: number) => ({
+      const tracks = videoIds.map((id: string) => ({
         videoId: id,
         title: id, // placeholder — enriched by frontend or oEmbed
         artist: '',
@@ -107,6 +107,8 @@ const routes: Record<string, Record<string, RouteHandler>> = {
   },
 };
 
+const MAX_BODY_SIZE = 1024 * 1024; // 1 MB
+
 function parseBody(req: IncomingMessage): Promise<any> {
   return new Promise((resolve) => {
     if (req.method === 'GET') {
@@ -115,8 +117,20 @@ function parseBody(req: IncomingMessage): Promise<any> {
     }
 
     let body = '';
-    req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+    let oversized = false;
+    req.on('data', (chunk: Buffer) => {
+      if (oversized) return;
+      body += chunk.toString();
+      if (body.length > MAX_BODY_SIZE) {
+        oversized = true;
+        body = ''; // Free memory
+      }
+    });
     req.on('end', () => {
+      if (oversized) {
+        resolve({});
+        return;
+      }
       try {
         resolve(body ? JSON.parse(body) : {});
       } catch {
