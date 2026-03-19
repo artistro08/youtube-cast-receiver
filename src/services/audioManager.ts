@@ -89,9 +89,25 @@ function notifyPlayState(playing: boolean) {
   playStateListeners.forEach((fn) => fn(playing));
 }
 
+let volumeThrottleTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingVolume: number | null = null;
+
 function notifyVolume(vol: number) {
+  // Always set actual audio volume immediately
   setAudioVolume(vol);
-  volumeListeners.forEach((fn) => fn(vol));
+
+  // Throttle UI notifications to max 1 per 150ms to prevent slider jitter
+  pendingVolume = vol;
+  if (!volumeThrottleTimer) {
+    volumeListeners.forEach((fn) => fn(vol));
+    volumeThrottleTimer = setTimeout(() => {
+      volumeThrottleTimer = null;
+      if (pendingVolume !== null && pendingVolume !== vol) {
+        volumeListeners.forEach((fn) => fn(pendingVolume!));
+      }
+      pendingVolume = null;
+    }, 150);
+  }
 }
 
 function notifyPosition(pos: number, dur: number) {

@@ -3,13 +3,11 @@ import type { PlayerState, TrackInfo, QueueState } from '../types';
 import {
   addTrackListener,
   addPlayStateListener,
-  addVolumeListener,
   addPositionListener,
   addConnectionListener,
   addQueueListener,
   getCurrentTrack,
   getIsPlaying,
-  getVolume,
   getIsConnected,
   getPosition,
   getDuration,
@@ -76,12 +74,11 @@ export const PlayerProvider: FC<{ children: ReactNode }> = ({ children }) => {
     // Restore state from audioManager (survives panel close/open)
     const track = getCurrentTrack();
     const playing = getIsPlaying();
-    const volume = getVolume();
     const conn = getIsConnected();
     const position = getPosition();
     const duration = getDuration();
 
-    dispatch({ type: 'UPDATE', payload: { track, isPlaying: playing, volume, connected: conn, position, duration } });
+    dispatch({ type: 'UPDATE', payload: { track, isPlaying: playing, connected: conn, position, duration } });
 
     // Fetch full state from backend
     void (async () => {
@@ -92,7 +89,7 @@ export const PlayerProvider: FC<{ children: ReactNode }> = ({ children }) => {
           payload: {
             track: serverState.track ?? null,
             isPlaying: serverState.isPlaying ?? false,
-            volume: serverState.volume ?? 100,
+            // volume handled by VolumeSlider directly via audioManager
             position: serverState.position ?? 0,
             duration: serverState.duration ?? 0,
             connected: serverState.connected ?? false,
@@ -111,7 +108,6 @@ export const PlayerProvider: FC<{ children: ReactNode }> = ({ children }) => {
     const unsubs = [
       addTrackListener((t) => dispatch({ type: 'SET_TRACK', payload: t })),
       addPlayStateListener((p) => dispatch({ type: 'SET_PLAYING', payload: p })),
-      addVolumeListener((v) => dispatch({ type: 'UPDATE', payload: { volume: v } })),
       addPositionListener((pos, dur) => dispatch({ type: 'SET_POSITION', payload: { position: pos, duration: dur } })),
       addConnectionListener((c) => dispatch({ type: 'UPDATE', payload: { connected: c } })),
       addQueueListener((tracks, pos) => dispatch({ type: 'SET_QUEUE', payload: { tracks, position: pos } })),

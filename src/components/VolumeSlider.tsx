@@ -2,8 +2,7 @@ import { SliderField } from '@decky/ui';
 import type { SliderFieldProps } from '@decky/ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FaVolumeUp } from 'react-icons/fa';
-import { apiSetVolume, setAudioVolume } from '../services/audioManager';
-import { usePlayer } from '../context/PlayerContext';
+import { addVolumeListener, getVolume, setAudioVolume, apiSetVolume } from '../services/audioManager';
 
 const PaddedSlider = (props: SliderFieldProps) => {
   const ref = useRef<HTMLDivElement>(null);
@@ -26,34 +25,45 @@ const PaddedSlider = (props: SliderFieldProps) => {
   );
 };
 
+// Module-level cache — survives tab switches / component remounts
+let cachedVolume: number = 100;
+
 export const VolumeSlider = () => {
-  const { volume } = usePlayer();
-  const [displayVolume, setDisplayVolume] = useState<number>(volume);
+  const [displayVolume, setDisplayVolume] = useState<number>(() => {
+    cachedVolume = getVolume();
+    return cachedVolume;
+  });
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const externalRef = useRef(false);
+  const userDragging = useRef(false);
+  const dragTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Sync with context when it changes externally (e.g. phone changed volume)
+  // Subscribe directly to audioManager volume changes (phone/WebSocket)
   useEffect(() => {
-    externalRef.current = true;
-    setDisplayVolume(volume);
-    // Clear flag after React render cycle so handleChange can distinguish
-    requestAnimationFrame(() => { externalRef.current = false; });
-  }, [volume]);
+    const unsub = addVolumeListener((vol) => {
+      cachedVolume = vol;
+      // Only update display if user is NOT actively dragging the slider
+      if (!userDragging.current) {
+        setDisplayVolume(vol);
+      }
+    });
 
-  useEffect(() => {
     return () => {
+      unsub();
       if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (dragTimeout.current) clearTimeout(dragTimeout.current);
     };
   }, []);
 
   const handleChange = useCallback((val: number) => {
+    // Mark as user-dragging to suppress external updates
+    userDragging.current = true;
+    if (dragTimeout.current) clearTimeout(dragTimeout.current);
+    dragTimeout.current = setTimeout(() => { userDragging.current = false; }, 800);
+
     setDisplayVolume(val);
+    cachedVolume = val;
 
-    // If this onChange was triggered by a programmatic value update (phone/WebSocket),
-    // don't echo it back to the backend — it would create a feedback loop.
-    if (externalRef.current) return;
-
-    // Set audio volume immediately for instant feedback
+    // Set audio volume immediately — no round-trip delay
     setAudioVolume(val);
 
     // Debounce the backend API call
