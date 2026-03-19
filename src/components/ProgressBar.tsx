@@ -11,6 +11,7 @@ const PaddedSlider = (props: SliderFieldProps) => {
     if (firstChild) {
       firstChild.style.paddingLeft = '19px';
       firstChild.style.paddingRight = '19px';
+      firstChild.style.paddingBottom = '35px';
     }
     ref.current.querySelectorAll<HTMLElement>('*').forEach((el) => {
       if (parseFloat(window.getComputedStyle(el).minWidth) >= 270)
