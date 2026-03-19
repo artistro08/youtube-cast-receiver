@@ -90,6 +90,7 @@ const TabsContainer = memo(() => {
         transform: scale(0.65) !important;
         transform-origin: center center !important;
       }
+      .yt-queue-active:not(:focus):not(:focus-within) { background: rgba(255,255,255,0) !important; }
     `;
     document.head.appendChild(el);
     return () => el.remove();
