@@ -33,14 +33,15 @@ async function main() {
   // Create WebSocket manager
   const wsManager = new WsManager(httpServer);
 
+  // Create DataStore
+  const dataStore = new JsonDataStore(dataStorePath);
+
   // Create CastPlayer
   const castPlayer = new CastPlayer({
     ytdlpPath,
     wsManager,
+    dataStore,
   });
-
-  // Create DataStore
-  const dataStore = new JsonDataStore(dataStorePath);
 
   // Create the YouTube Cast Receiver
   const deviceName = os.hostname();

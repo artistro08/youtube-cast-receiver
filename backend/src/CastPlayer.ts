@@ -2,15 +2,18 @@ import { Player, Constants } from 'yt-cast-receiver';
 import type { Volume, Video } from 'yt-cast-receiver';
 import { extractAudioInfo, type AudioInfo } from './ytdlp.js';
 import type { WsManager } from './wsManager.js';
+import type { JsonDataStore } from './JsonDataStore.js';
 
 export interface CastPlayerOptions {
   ytdlpPath: string;
   wsManager: WsManager;
+  dataStore: JsonDataStore;
 }
 
 export class CastPlayer extends Player {
   private ytdlpPath: string;
   private ws: WsManager;
+  private store: JsonDataStore;
   private currentVolume: Volume = { level: 100, muted: false };
   private currentPosition: number = 0;
   private currentDuration: number = 0;
@@ -22,6 +25,11 @@ export class CastPlayer extends Player {
     super();
     this.ytdlpPath = options.ytdlpPath;
     this.ws = options.wsManager;
+    this.store = options.dataStore;
+    // Load persisted volume
+    void this.store.get<Volume>('volume').then((vol) => {
+      if (vol) this.currentVolume = vol;
+    });
   }
 
   /**
@@ -247,6 +255,7 @@ export class CastPlayer extends Player {
   protected async doSetVolume(volume: Volume): Promise<boolean> {
     this.currentVolume = volume;
     this.ws.broadcast('volume', { value: volume.level, muted: volume.muted });
+    void this.store.set('volume', volume);
     return true;
   }
 
