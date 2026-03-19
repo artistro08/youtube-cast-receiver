@@ -86,6 +86,17 @@ async function main() {
   receiver.on('senderConnect', (sender) => {
     console.log(`[YTCast] Phone connected: ${sender.name}`);
     wsManager.broadcast('connection', { phoneConnected: true });
+
+    // The phone sends its own volume (usually 100%) on connect, overriding
+    // our persisted volume. After the connection settles, push our saved
+    // volume back to both the phone and the frontend.
+    setTimeout(async () => {
+      const savedVol = await dataStore.get<{ level: number; muted: boolean }>('volume');
+      if (savedVol) {
+        console.log(`[YTCast] Restoring persisted volume: ${savedVol.level}`);
+        await castPlayer.setVolume(savedVol);
+      }
+    }, 2000);
   });
 
   receiver.on('senderDisconnect', (sender, implicit) => {
