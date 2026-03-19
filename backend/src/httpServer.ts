@@ -39,23 +39,7 @@ const routes: Record<string, Record<string, RouteHandler>> = {
     },
 
     '/api/queue': async (_body, ctx) => {
-      const playlist = ctx.libraryPlayer.queue;
-      const state = playlist.getState();
-      const videoIds = playlist.videoIds;
-
-      const tracks = videoIds.map((id: string) => ({
-        videoId: id,
-        title: id, // placeholder — enriched by frontend or oEmbed
-        artist: '',
-        albumArt: '',
-        isCurrent: state.current?.id === id,
-      }));
-
-      const currentIndex = state.current
-        ? videoIds.indexOf(state.current.id)
-        : -1;
-
-      return { tracks, position: currentIndex };
+      return ctx.castPlayer.getQueueWithMetadata();
     },
   },
 
@@ -93,16 +77,12 @@ const routes: Record<string, Record<string, RouteHandler>> = {
       return { ok: true };
     },
 
-    '/api/queue/jump': async (body, _ctx) => {
-      // Queue jumping requires accessing the library's playlist internals
-      // This will be refined in Plan 3 when queue interaction is fully built
-      return { ok: true };
+    '/api/queue/jump': async (_body, _ctx) => {
+      return { ok: false, message: 'Queue is managed from your phone' };
     },
 
-    '/api/queue/remove': async (body, _ctx) => {
-      // Queue removal requires accessing the library's playlist internals
-      // This will be refined in Plan 3
-      return { ok: true };
+    '/api/queue/remove': async (_body, _ctx) => {
+      return { ok: false, message: 'Queue is managed from your phone' };
     },
   },
 };

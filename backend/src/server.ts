@@ -95,20 +95,8 @@ async function main() {
 
   // Subscribe to Playlist events for real-time queue broadcasts
   const broadcastQueue = () => {
-    const playlist = castPlayer.queue;
-    const state = playlist.getState();
-    const videoIds = playlist.videoIds;
-    const currentIndex = state.current
-      ? videoIds.indexOf(state.current.id)
-      : -1;
-    const tracks = videoIds.map((id: string) => ({
-      videoId: id,
-      title: id, // placeholder — enriched by frontend or oEmbed in Plan 3
-      artist: '',
-      albumArt: '',
-      isCurrent: state.current?.id === id,
-    }));
-    wsManager.broadcast('queue', { tracks, position: currentIndex });
+    const queueData = castPlayer.getQueueWithMetadata();
+    wsManager.broadcast('queue', queueData);
   };
 
   const playlist = castPlayer.queue;
