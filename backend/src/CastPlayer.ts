@@ -47,10 +47,24 @@ export class CastPlayer extends Player {
    */
   async handleTrackEnded(): Promise<void> {
     this.playing = false;
-    // Advance to the next track if available, otherwise signal stopped
+
     if (this.queue.hasNext) {
       console.log('[YTCast] Track ended, advancing to next');
       await this.next();
+      return;
+    }
+
+    // hasNext can be wrong after queue jumps via playVideoById() — the
+    // constructed Video lacks context.index, so the library's isLast
+    // getter defaults to true. Fall back to checking videoIds directly.
+    const videoIds = this.queue.videoIds;
+    const currentId = this.queue.current?.id;
+    const currentIndex = currentId ? videoIds.indexOf(currentId) : -1;
+
+    if (currentIndex >= 0 && currentIndex < videoIds.length - 1) {
+      const nextId = videoIds[currentIndex + 1];
+      console.log(`[YTCast] Track ended, advancing via fallback to ${nextId}`);
+      await this.playVideoById(nextId);
     } else {
       console.log('[YTCast] Track ended, no more tracks in queue');
       await this.notifyExternalStateChange(Constants.PLAYER_STATUSES.STOPPED);
