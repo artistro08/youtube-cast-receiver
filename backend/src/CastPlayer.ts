@@ -260,22 +260,30 @@ export class CastPlayer extends Player {
   }
 
   /**
-   * Override setVolume to suppress OnVolumeChanged ack for phone-initiated
-   * volume changes. The library's 200ms debounce on the ack creates a feedback
-   * loop: phone sends volume → receiver acks 200ms late → phone snaps slider
-   * back to acked value → phone sends new conflicting volume → oscillation.
+   * Override setVolume to bypass the library's 200ms debounce on
+   * OnVolumeChanged for phone-initiated volume changes. The debounce
+   * causes the phone's YouTube app slider to oscillate: the ack arrives
+   * 200ms late, the phone snaps its slider back, generating a new
+   * conflicting setVolume command.
    *
-   * For phone-initiated changes (AID is set): call doSetVolume directly,
-   * skip the parent's state event emission so no OnVolumeChanged is sent back.
-   * For receiver-initiated changes (no AID): use full parent flow so the
-   * phone gets notified.
+   * The library debounces when: messages.every(c => c.AID !== null).
+   * By emitting the state event with AID=null, the ack is sent
+   * IMMEDIATELY — no debounce. For receiver-initiated changes (Deck
+   * slider), we use the full parent flow.
    */
   async setVolume(volume: Volume, AID?: number | null): Promise<boolean> {
     if (AID != null) {
-      console.log(`[YTCast] setVolume (phone-initiated, suppressing ack): ${volume.level}`);
-      return this.doSetVolume({ ...volume });
+      // Phone-initiated: replicate parent logic but emit with AID=null
+      // to bypass the 200ms debounce on OnVolumeChanged
+      const v = { ...volume };
+      const previousState = await this.getState();
+      const result = await this.doSetVolume(v);
+      if (result) {
+        const currentState = await this.getState();
+        this.emit('state', { current: currentState, previous: previousState, AID: null });
+      }
+      return result;
     }
-    console.log(`[YTCast] setVolume (receiver-initiated, full ack): ${volume.level}`);
     return super.setVolume(volume, AID);
   }
 
