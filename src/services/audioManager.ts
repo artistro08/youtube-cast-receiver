@@ -23,6 +23,14 @@ let connected = false;
 const VOLUME_SUPPRESS_MS = 600;
 let lastLocalVolumeChangeAt = 0;
 
+// Settling debounce for remote volume changes (ms).
+// The DIAL/Lounge protocol relays commands through YouTube's servers,
+// causing ~200ms round-trip latency. The phone's YouTube app oscillates
+// ±3 levels when the ack arrives late. This debounce waits for the
+// oscillation to settle before applying the final value.
+const VOLUME_SETTLE_MS = 300;
+let volumeSettleTimer: ReturnType<typeof setTimeout> | null = null;
+
 // --- Listeners ---
 
 type TrackListener = (track: TrackInfo | null) => void;
@@ -100,8 +108,15 @@ function notifyVolume(vol: number) {
     // overwriting the user's more recent value with a stale echo.
     return;
   }
-  setAudioVolume(vol);
-  volumeListeners.forEach((fn) => fn(vol));
+
+  // Debounce remote volume changes so the phone's ±3 oscillation
+  // settles before we apply it to the audio element and update the slider.
+  if (volumeSettleTimer) clearTimeout(volumeSettleTimer);
+  volumeSettleTimer = setTimeout(() => {
+    volumeSettleTimer = null;
+    setAudioVolume(vol);
+    volumeListeners.forEach((fn) => fn(vol));
+  }, VOLUME_SETTLE_MS);
 }
 
 function notifyPosition(pos: number, dur: number) {
@@ -384,6 +399,11 @@ export function initAudio() {
 
 export function destroyAudio() {
   stopProgressReporting();
+
+  if (volumeSettleTimer) {
+    clearTimeout(volumeSettleTimer);
+    volumeSettleTimer = null;
+  }
 
   if (reconnectTimeout) {
     clearTimeout(reconnectTimeout);

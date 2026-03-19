@@ -259,34 +259,6 @@ export class CastPlayer extends Player {
     return true;
   }
 
-  /**
-   * Override setVolume to bypass the library's 200ms debounce on
-   * OnVolumeChanged for phone-initiated volume changes. The debounce
-   * causes the phone's YouTube app slider to oscillate: the ack arrives
-   * 200ms late, the phone snaps its slider back, generating a new
-   * conflicting setVolume command.
-   *
-   * The library debounces when: messages.every(c => c.AID !== null).
-   * By emitting the state event with AID=null, the ack is sent
-   * IMMEDIATELY — no debounce. For receiver-initiated changes (Deck
-   * slider), we use the full parent flow.
-   */
-  async setVolume(volume: Volume, AID?: number | null): Promise<boolean> {
-    if (AID != null) {
-      // Phone-initiated: replicate parent logic but emit with AID=null
-      // to bypass the 200ms debounce on OnVolumeChanged
-      const v = { ...volume };
-      const previousState = await this.getState();
-      const result = await this.doSetVolume(v);
-      if (result) {
-        const currentState = await this.getState();
-        this.emit('state', { current: currentState, previous: previousState, AID: null });
-      }
-      return result;
-    }
-    return super.setVolume(volume, AID);
-  }
-
   protected async doSetVolume(volume: Volume): Promise<boolean> {
     console.log(`[YTCast] doSetVolume: ${volume.level} (muted: ${volume.muted})`);
     this.currentVolume = volume;
