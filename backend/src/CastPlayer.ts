@@ -260,6 +260,7 @@ export class CastPlayer extends Player {
   }
 
   protected async doSetVolume(volume: Volume): Promise<boolean> {
+    console.log(`[YTCast] doSetVolume: ${volume.level} (muted: ${volume.muted})`);
     this.currentVolume = volume;
     this.ws.broadcast('volume', { value: volume.level, muted: volume.muted });
     void this.store.set('volume', volume);
@@ -267,6 +268,7 @@ export class CastPlayer extends Player {
   }
 
   protected async doGetVolume(): Promise<Volume> {
+    console.log(`[YTCast] doGetVolume: ${this.currentVolume.level}`);
     return this.currentVolume;
   }
 
