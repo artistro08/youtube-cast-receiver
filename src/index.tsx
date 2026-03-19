@@ -8,7 +8,7 @@ import { PlayerView } from './components/PlayerView';
 import { QueueView } from './components/QueueView';
 import { initAudio, destroyAudio } from './services/audioManager';
 
-const MIN_HEIGHT = 433;
+const MIN_HEIGHT = 422;
 
 const TabsContainer = memo(() => {
   const [activeTab, setActiveTab] = useState<string>('player');

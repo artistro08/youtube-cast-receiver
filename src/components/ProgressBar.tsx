@@ -70,7 +70,7 @@ export const ProgressBar = () => {
   const total = formatTime(duration);
 
   return (
-    <div>
+    <div style={{ paddingBottom: '8px' }}>
       <PaddedSlider
         value={Math.min(position, maxVal)}
         min={0}
@@ -83,7 +83,7 @@ export const ProgressBar = () => {
         display: 'flex',
         justifyContent: 'space-between',
         padding: '0 19px',
-        marginTop: '-8px',
+        marginTop: '-4px',
         fontSize: '11px',
         color: 'var(--gpSystemLighterGrey)',
       }}>
