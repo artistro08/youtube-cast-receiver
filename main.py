@@ -17,6 +17,27 @@ class Plugin:
     async def _main(self):
         logger.info("Starting YouTube Cast Receiver backend...")
 
+        # Kill any leftover Node.js process from a previous install/reload
+        # that wasn't properly unloaded (e.g. reinstall without uninstall)
+        if self.node_process:
+            try:
+                self.node_process.kill()
+                self.node_process.wait(timeout=2)
+            except Exception:
+                pass
+            self.node_process = None
+
+        # Also kill any orphaned process on our port
+        try:
+            result = subprocess.run(
+                ["fuser", "-k", "39281/tcp"],
+                capture_output=True, timeout=5
+            )
+            if result.returncode == 0:
+                logger.info("Killed orphaned process on port 39281")
+        except Exception:
+            pass
+
         # Ensure node binary is executable
         if os.path.exists(NODE_BIN):
             os.chmod(NODE_BIN, 0o755)
