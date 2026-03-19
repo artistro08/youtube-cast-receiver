@@ -48,16 +48,8 @@ export class CastPlayer extends Player {
   async handleTrackEnded(): Promise<void> {
     this.playing = false;
 
-    const videoIds = this.queue.videoIds;
-    const currentId = this.queue.current?.id;
-    const currentIndex = currentId ? videoIds.indexOf(currentId) : -1;
-    const hasNext = this.queue.hasNext;
-    const isLast = this.queue.isLast;
-
-    console.log(`[YTCast] Track ended. current=${currentId}, index=${currentIndex}, videoIds=[${videoIds.join(',')}], hasNext=${hasNext}, isLast=${isLast}`);
-
-    if (hasNext) {
-      console.log('[YTCast] Advancing to next (library)');
+    if (this.queue.hasNext) {
+      console.log('[YTCast] Track ended, advancing to next');
       await this.next();
       return;
     }
@@ -65,12 +57,16 @@ export class CastPlayer extends Player {
     // hasNext can be wrong after queue jumps via playVideoById() — the
     // constructed Video lacks context.index, so the library's isLast
     // getter defaults to true. Fall back to checking videoIds directly.
+    const videoIds = this.queue.videoIds;
+    const currentId = this.queue.current?.id;
+    const currentIndex = currentId ? videoIds.indexOf(currentId) : -1;
+
     if (currentIndex >= 0 && currentIndex < videoIds.length - 1) {
       const nextId = videoIds[currentIndex + 1];
-      console.log(`[YTCast] hasNext was wrong, advancing via fallback to ${nextId}`);
+      console.log(`[YTCast] Track ended, advancing via fallback to ${nextId}`);
       await this.playVideoById(nextId);
     } else {
-      console.log('[YTCast] No more tracks in queue');
+      console.log('[YTCast] Track ended, no more tracks in queue');
       await this.notifyExternalStateChange(Constants.PLAYER_STATUSES.STOPPED);
     }
   }
@@ -278,7 +274,6 @@ export class CastPlayer extends Player {
   }
 
   protected async doSetVolume(volume: Volume): Promise<boolean> {
-    console.log(`[YTCast] doSetVolume: ${volume.level} (muted: ${volume.muted})`);
     this.currentVolume = volume;
     this.ws.broadcast('volume', { value: volume.level, muted: volume.muted });
     void this.store.set('volume', volume);
