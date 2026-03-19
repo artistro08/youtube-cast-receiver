@@ -27,7 +27,6 @@ If your Steam Deck doesn't appear in the cast list, your router may block multic
 
 ## Known Limitations
 
-- **Volume control from phone is limited** — Adjusting volume from the Deck panel works well. Volume changes from the phone may be inconsistent due to how the cast protocol handles volume synchronization between sender and receiver. For best results, use the Deck's volume slider.
 - **Queue is read-only** — The queue is managed by the YouTube app on your phone. You can view it in the Queue tab, but adding/removing tracks must be done from the phone. Tapping a queue item will attempt to jump to it.
 - **Audio only** — Video content plays audio only. The plugin does not render video.
 - **yt-dlp dependency** — Audio extraction relies on yt-dlp. If YouTube changes its anti-bot measures, playback may break until yt-dlp is updated. The plugin attempts to self-update yt-dlp on each load.
