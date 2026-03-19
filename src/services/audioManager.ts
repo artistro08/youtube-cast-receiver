@@ -90,7 +90,7 @@ function notifyPlayState(playing: boolean) {
 }
 
 function notifyVolume(vol: number) {
-  currentVolume = vol;
+  setAudioVolume(vol);
   volumeListeners.forEach((fn) => fn(vol));
 }
 
