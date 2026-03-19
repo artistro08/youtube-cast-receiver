@@ -6,3 +6,7 @@ bin/
 .idea/
 .vscode/
 *.log
+staging/
+node-extract/
+node-linux-x64.tar.xz
+node-linux-x64.tar
