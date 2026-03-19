@@ -16,6 +16,7 @@ export class CastPlayer extends Player {
   private currentDuration: number = 0;
   private currentTrackInfo: AudioInfo | null = null;
   private playing: boolean = false;
+  private metadataCache: Map<string, AudioInfo> = new Map();
 
   constructor(options: CastPlayerOptions) {
     super();
@@ -81,12 +82,35 @@ export class CastPlayer extends Player {
     return this.playing;
   }
 
+  getQueueWithMetadata(): { tracks: Array<{ videoId: string; title: string; artist: string; albumArt: string; isCurrent: boolean }>; position: number } {
+    const playlist = this.queue;
+    const state = playlist.getState();
+    const videoIds = playlist.videoIds;
+    const currentIndex = state.current
+      ? videoIds.indexOf(state.current.id)
+      : -1;
+
+    const tracks = videoIds.map((id: string) => {
+      const cached = this.metadataCache.get(id);
+      return {
+        videoId: id,
+        title: cached?.title ?? id,
+        artist: cached?.artist ?? '',
+        albumArt: cached?.albumArt ?? '',
+        isCurrent: state.current?.id === id,
+      };
+    });
+
+    return { tracks, position: currentIndex };
+  }
+
   // --- Player abstract method implementations ---
 
   protected async doPlay(video: Video, position: number): Promise<boolean> {
     try {
       const info = await extractAudioInfo(video.id, this.ytdlpPath);
       this.currentTrackInfo = info;
+      this.metadataCache.set(video.id, info);
       this.currentPosition = position;
       this.currentDuration = info.duration;
       this.playing = true;
