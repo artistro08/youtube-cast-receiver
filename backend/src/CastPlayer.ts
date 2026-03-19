@@ -47,7 +47,14 @@ export class CastPlayer extends Player {
    */
   async handleTrackEnded(): Promise<void> {
     this.playing = false;
-    await this.notifyExternalStateChange(Constants.PLAYER_STATUSES.STOPPED);
+    // Advance to the next track if available, otherwise signal stopped
+    if (this.queue.hasNext) {
+      console.log('[YTCast] Track ended, advancing to next');
+      await this.next();
+    } else {
+      console.log('[YTCast] Track ended, no more tracks in queue');
+      await this.notifyExternalStateChange(Constants.PLAYER_STATUSES.STOPPED);
+    }
   }
 
   /**
