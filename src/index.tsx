@@ -5,6 +5,7 @@ import { FaChromecast } from 'react-icons/fa';
 
 import { PlayerProvider } from './context/PlayerContext';
 import { PlayerView } from './components/PlayerView';
+import { QueueView } from './components/QueueView';
 import { initAudio, destroyAudio } from './services/audioManager';
 
 const MIN_HEIGHT = 433;
@@ -98,7 +99,7 @@ const TabsContainer = memo(() => {
 
   const tabItems = useMemo(() => [
     { id: 'player', title: 'Player', content: <PlayerView /> },
-    { id: 'queue', title: 'Queue', content: <div style={{ padding: '16px', textAlign: 'center', color: 'var(--gpSystemLighterGrey)' }}>Queue — coming in Plan 3</div> },
+    { id: 'queue', title: 'Queue', content: <QueueView /> },
   ], []);
 
   return (
