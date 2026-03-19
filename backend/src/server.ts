@@ -165,6 +165,7 @@ async function main() {
   const shutdown = async () => {
     console.log('[YTCast] Shutting down...');
     await receiver.stop();
+    await dataStore.flush();
     wsManager.close();
     httpServer.close();
     process.exit(0);
