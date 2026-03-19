@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -10,12 +10,14 @@ describe('JsonDataStore', () => {
   let store: JsonDataStore;
 
   beforeEach(() => {
+    vi.useFakeTimers();
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ytcast-test-'));
     filePath = path.join(tmpDir, 'datastore.json');
     store = new JsonDataStore(filePath);
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
@@ -39,6 +41,7 @@ describe('JsonDataStore', () => {
 
   it('persists data to disk', async () => {
     await store.set('key1', 'value1');
+    await store.flush();
     const store2 = new JsonDataStore(filePath);
     const result = await store2.get<string>('key1');
     expect(result).toBe('value1');
@@ -55,6 +58,7 @@ describe('JsonDataStore', () => {
     const nestedPath = path.join(tmpDir, 'a', 'b', 'c', 'store.json');
     const nestedStore = new JsonDataStore(nestedPath);
     await nestedStore.set('deep', 'value');
+    await nestedStore.flush();
     const result = await nestedStore.get<string>('deep');
     expect(result).toBe('value');
   });
