@@ -1,0 +1,42 @@
+{
+  "name": "youtube-cast-receiver",
+  "version": "0.0.1",
+  "description": "YouTube Cast Receiver for Steam Deck via Decky Loader",
+  "type": "module",
+  "scripts": {
+    "build": "rollup -c",
+    "build:backend": "esbuild backend/src/server.ts --bundle --platform=node --format=esm --outfile=backend/out/server.js --external:bufferutil --external:utf-8-validate --banner:js=\"import { createRequire } from 'module'; const require = createRequire(import.meta.url);\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "package": "powershell -ExecutionPolicy Bypass -File build.ps1"
+  },
+  "license": "BSD-3-Clause",
+  "devDependencies": {
+    "@decky/rollup": "^1.0.2",
+    "@decky/ui": "^4.11.0",
+    "@rollup/rollup-linux-x64-musl": "^4.53.3",
+    "@types/node": "^20.11.0",
+    "@types/react": "19.1.1",
+    "@types/react-dom": "19.1.1",
+    "@types/ws": "^8.5.10",
+    "esbuild": "^0.20.0",
+    "rollup": "^4.53.3",
+    "typescript": "^5.6.2",
+    "vitest": "^1.2.0"
+  },
+  "dependencies": {
+    "@decky/api": "^1.1.3",
+    "react-icons": "^5.3.0",
+    "tslib": "^2.7.0",
+    "ws": "^8.16.0",
+    "yt-cast-receiver": "^2.1.0"
+  },
+  "pnpm": {
+    "peerDependencyRules": {
+      "ignoreMissing": [
+        "react",
+        "react-dom"
+      ]
+    }
+  }
+}

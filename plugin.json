@@ -1,0 +1,11 @@
+{
+  "name": "YouTube Cast Receiver",
+  "author": "artistro08",
+  "flags": ["_root"],
+  "api_version": 1,
+  "publish": {
+    "tags": ["music", "youtube", "cast"],
+    "description": "Turn your Steam Deck into a YouTube Cast receiver.",
+    "image": ""
+  }
+}
