@@ -259,6 +259,26 @@ export class CastPlayer extends Player {
     return true;
   }
 
+  /**
+   * Override setVolume to suppress OnVolumeChanged ack for phone-initiated
+   * volume changes. The library's 200ms debounce on the ack creates a feedback
+   * loop: phone sends volume → receiver acks 200ms late → phone snaps slider
+   * back to acked value → phone sends new conflicting volume → oscillation.
+   *
+   * For phone-initiated changes (AID is set): call doSetVolume directly,
+   * skip the parent's state event emission so no OnVolumeChanged is sent back.
+   * For receiver-initiated changes (no AID): use full parent flow so the
+   * phone gets notified.
+   */
+  async setVolume(volume: Volume, AID?: number | null): Promise<boolean> {
+    if (AID != null) {
+      console.log(`[YTCast] setVolume (phone-initiated, suppressing ack): ${volume.level}`);
+      return this.doSetVolume({ ...volume });
+    }
+    console.log(`[YTCast] setVolume (receiver-initiated, full ack): ${volume.level}`);
+    return super.setVolume(volume, AID);
+  }
+
   protected async doSetVolume(volume: Volume): Promise<boolean> {
     console.log(`[YTCast] doSetVolume: ${volume.level} (muted: ${volume.muted})`);
     this.currentVolume = volume;
