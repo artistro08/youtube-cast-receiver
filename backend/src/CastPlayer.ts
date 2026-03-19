@@ -101,7 +101,53 @@ export class CastPlayer extends Player {
       };
     });
 
+    // Fetch oEmbed metadata for uncached items in the background
+    const uncachedIds = videoIds.filter((id) => !this.metadataCache.has(id));
+    if (uncachedIds.length > 0) {
+      void this.enrichQueueMetadata(uncachedIds);
+    }
+
     return { tracks, position: currentIndex };
+  }
+
+  private async enrichQueueMetadata(videoIds: string[]): Promise<void> {
+    let enriched = false;
+    for (const id of videoIds) {
+      if (this.metadataCache.has(id)) continue;
+      const meta = await this.fetchMetadataFromOembed(id);
+      if (meta) {
+        this.metadataCache.set(id, {
+          videoId: id,
+          title: meta.title,
+          artist: meta.artist,
+          albumArt: meta.albumArt,
+          duration: 0,
+          url: '',
+        });
+        enriched = true;
+      }
+    }
+    // If we enriched any items, broadcast updated queue
+    if (enriched) {
+      const updatedQueue = this.getQueueWithMetadata();
+      this.ws.broadcast('queue', updatedQueue);
+    }
+  }
+
+  private async fetchMetadataFromOembed(videoId: string): Promise<{ title: string; artist: string; albumArt: string } | null> {
+    try {
+      const url = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}&format=json`;
+      const response = await fetch(url);
+      if (!response.ok) return null;
+      const data = await response.json() as { title?: string; author_name?: string; thumbnail_url?: string };
+      return {
+        title: data.title ?? videoId,
+        artist: data.author_name ?? '',
+        albumArt: data.thumbnail_url ?? '',
+      };
+    } catch {
+      return null;
+    }
   }
 
   // --- Player abstract method implementations ---
@@ -123,6 +169,7 @@ export class CastPlayer extends Player {
         duration: info.duration,
         url: info.url,
       });
+      console.log(`[YTCast] Playing: ${info.title} by ${info.artist} (${info.videoId})`);
 
       if (position > 0) {
         this.ws.broadcast('seek', { position });
@@ -130,6 +177,7 @@ export class CastPlayer extends Player {
 
       return true;
     } catch (err) {
+      console.error(`[YTCast] doPlay failed for ${video.id}:`, (err as Error).message);
       this.ws.broadcast('error', {
         message: `Failed to play: ${(err as Error).message}`,
         code: 'YTDLP_FAILED',

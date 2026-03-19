@@ -23,6 +23,10 @@ export function extractAudioInfo(videoId: string, ytdlpPath: string): Promise<Au
     proc.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
     proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
 
+    proc.on('error', (err) => {
+      reject(new Error(`Failed to spawn yt-dlp: ${err.message}`));
+    });
+
     proc.on('close', (code) => {
       if (code !== 0) {
         reject(new Error(`yt-dlp exited with code ${code}: ${stderr.trim()}`));
