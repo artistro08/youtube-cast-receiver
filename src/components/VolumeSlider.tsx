@@ -30,10 +30,14 @@ export const VolumeSlider = () => {
   const { volume } = usePlayer();
   const [displayVolume, setDisplayVolume] = useState<number>(volume);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const externalRef = useRef(false);
 
   // Sync with context when it changes externally (e.g. phone changed volume)
   useEffect(() => {
+    externalRef.current = true;
     setDisplayVolume(volume);
+    // Clear flag after React render cycle so handleChange can distinguish
+    requestAnimationFrame(() => { externalRef.current = false; });
   }, [volume]);
 
   useEffect(() => {
@@ -44,6 +48,10 @@ export const VolumeSlider = () => {
 
   const handleChange = useCallback((val: number) => {
     setDisplayVolume(val);
+
+    // If this onChange was triggered by a programmatic value update (phone/WebSocket),
+    // don't echo it back to the backend — it would create a feedback loop.
+    if (externalRef.current) return;
 
     // Set audio volume immediately for instant feedback
     setAudioVolume(val);
