@@ -59,7 +59,8 @@ describe('JsonDataStore', () => {
     const nestedStore = new JsonDataStore(nestedPath);
     await nestedStore.set('deep', 'value');
     await nestedStore.flush();
-    const result = await nestedStore.get<string>('deep');
+    const nestedStore2 = new JsonDataStore(nestedPath);
+    const result = await nestedStore2.get<string>('deep');
     expect(result).toBe('value');
   });
 });

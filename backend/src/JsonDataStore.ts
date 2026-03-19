@@ -10,6 +10,7 @@ export class JsonDataStore extends DataStore {
   private data: Record<string, unknown>;
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
   private dirEnsured: boolean = false;
+  private inflightWrite: Promise<void> = Promise.resolve();
 
   constructor(filePath: string) {
     super();
@@ -54,14 +55,17 @@ export class JsonDataStore extends DataStore {
   }
 
   private async flushToDisk(): Promise<void> {
-    try {
-      if (!this.dirEnsured) {
-        await fsp.mkdir(path.dirname(this.filePath), { recursive: true });
-        this.dirEnsured = true;
+    this.inflightWrite = this.inflightWrite.then(async () => {
+      try {
+        if (!this.dirEnsured) {
+          await fsp.mkdir(path.dirname(this.filePath), { recursive: true });
+          this.dirEnsured = true;
+        }
+        await fsp.writeFile(this.filePath, JSON.stringify(this.data, null, 2), 'utf-8');
+      } catch (err) {
+        console.error('[YTCast] Failed to save datastore:', err);
       }
-      await fsp.writeFile(this.filePath, JSON.stringify(this.data, null, 2), 'utf-8');
-    } catch (err) {
-      console.error('[YTCast] Failed to save datastore:', err);
-    }
+    });
+    return this.inflightWrite;
   }
 }
