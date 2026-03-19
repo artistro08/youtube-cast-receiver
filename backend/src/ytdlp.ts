@@ -11,10 +11,13 @@ export interface AudioInfo {
 
 export function extractAudioInfo(videoId: string, ytdlpPath: string): Promise<AudioInfo> {
   return new Promise((resolve, reject) => {
+    // Strip LD_LIBRARY_PATH and PYTHONPATH to avoid conflicts with
+    // Decky Loader's environment overriding PyInstaller's bundled libraries
+    const env = { ...process.env, LD_LIBRARY_PATH: '', PYTHONPATH: '' };
     const proc = spawn(
       ytdlpPath,
       ['-f', 'bestaudio[ext=m4a]/bestaudio', '-j', '--no-playlist', '--', videoId],
-      { stdio: ['ignore', 'pipe', 'pipe'] }
+      { stdio: ['ignore', 'pipe', 'pipe'], env }
     );
 
     let stdout = '';
@@ -52,7 +55,8 @@ export function extractAudioInfo(videoId: string, ytdlpPath: string): Promise<Au
 
 export function selfUpdate(ytdlpPath: string): Promise<void> {
   return new Promise((resolve) => {
-    const proc = spawn(ytdlpPath, ['-U'], { stdio: 'ignore' });
+    const env = { ...process.env, LD_LIBRARY_PATH: '', PYTHONPATH: '' };
+    const proc = spawn(ytdlpPath, ['-U'], { stdio: 'ignore', env });
     proc.on('close', () => resolve());
     proc.on('error', () => resolve()); // Fail silently
   });
