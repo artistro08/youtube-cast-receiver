@@ -2,7 +2,7 @@ import { SliderField } from '@decky/ui';
 import type { SliderFieldProps } from '@decky/ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FaVolumeUp } from 'react-icons/fa';
-import { apiSetVolume } from '../services/audioManager';
+import { apiSetVolume, setAudioVolume } from '../services/audioManager';
 import { usePlayer } from '../context/PlayerContext';
 
 const PaddedSlider = (props: SliderFieldProps) => {
@@ -45,7 +45,10 @@ export const VolumeSlider = () => {
   const handleChange = useCallback((val: number) => {
     setDisplayVolume(val);
 
-    // Debounce the API call
+    // Set audio volume immediately for instant feedback
+    setAudioVolume(val);
+
+    // Debounce the backend API call
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       void apiSetVolume(val);

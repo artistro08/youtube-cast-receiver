@@ -297,7 +297,7 @@ function onAudioPause() {
 
 // --- Audio volume ---
 
-function setAudioVolume(level: number) {
+export function setAudioVolume(level: number) {
   if (audioElement) {
     audioElement.volume = Math.max(0, Math.min(1, level / 100));
   }
