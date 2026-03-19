@@ -77,8 +77,11 @@ const routes: Record<string, Record<string, RouteHandler>> = {
       return { ok: true };
     },
 
-    '/api/queue/jump': async (_body, _ctx) => {
-      return { ok: false, message: 'Queue is managed from your phone' };
+    '/api/queue/jump': async (body, ctx) => {
+      const videoId = body?.videoId;
+      if (!videoId) return { ok: false, message: 'Missing videoId' };
+      const result = await ctx.castPlayer.playVideoById(videoId);
+      return { ok: result };
     },
 
     '/api/queue/remove': async (_body, _ctx) => {

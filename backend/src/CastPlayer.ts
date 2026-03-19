@@ -150,6 +150,25 @@ export class CastPlayer extends Player {
     }
   }
 
+  /**
+   * Jump to a specific video in the queue by ID.
+   * Constructs a Video object using the current video's client.
+   */
+  async playVideoById(videoId: string): Promise<boolean> {
+    const state = this.queue.getState();
+    const client = state.current?.client;
+    if (!client) {
+      console.error('[YTCast] Cannot jump: no current client');
+      return false;
+    }
+    try {
+      return await this.play({ id: videoId, client } as any, 0);
+    } catch (err) {
+      console.error(`[YTCast] Jump to ${videoId} failed:`, (err as Error).message);
+      return false;
+    }
+  }
+
   // --- Player abstract method implementations ---
 
   protected async doPlay(video: Video, position: number): Promise<boolean> {
@@ -190,7 +209,6 @@ export class CastPlayer extends Player {
     this.playing = false;
     this.ws.broadcast('state', {
       isPlaying: false,
-      volume: this.currentVolume.level,
       position: this.currentPosition,
       duration: this.currentDuration,
     });
@@ -201,7 +219,6 @@ export class CastPlayer extends Player {
     this.playing = true;
     this.ws.broadcast('state', {
       isPlaying: true,
-      volume: this.currentVolume.level,
       position: this.currentPosition,
       duration: this.currentDuration,
     });
