@@ -14,3 +14,16 @@ export interface PlayerState {
   duration: number;
   connected: boolean;
 }
+
+export interface QueueItem {
+  videoId: string;
+  title: string;
+  artist: string;
+  albumArt: string;
+  isCurrent: boolean;
+}
+
+export interface QueueState {
+  tracks: QueueItem[];
+  position: number;
+}

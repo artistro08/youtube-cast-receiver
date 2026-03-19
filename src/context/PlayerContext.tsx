@@ -1,11 +1,12 @@
 import { createContext, useContext, useEffect, useReducer, useCallback, type FC, type ReactNode } from 'react';
-import type { PlayerState, TrackInfo } from '../types';
+import type { PlayerState, TrackInfo, QueueState } from '../types';
 import {
   addTrackListener,
   addPlayStateListener,
   addVolumeListener,
   addPositionListener,
   addConnectionListener,
+  addQueueListener,
   getCurrentTrack,
   getIsPlaying,
   getVolume,
@@ -13,24 +14,31 @@ import {
   getPosition,
   getDuration,
   apiGetState,
+  apiGetQueue,
 } from '../services/audioManager';
 
-const defaultState: PlayerState = {
+interface FullState extends PlayerState {
+  queue: QueueState;
+}
+
+const defaultState: FullState = {
   track: null,
   isPlaying: false,
   volume: 100,
   position: 0,
   duration: 0,
   connected: false,
+  queue: { tracks: [], position: -1 },
 };
 
 type Action =
-  | { type: 'UPDATE'; payload: Partial<PlayerState> }
+  | { type: 'UPDATE'; payload: Partial<FullState> }
   | { type: 'SET_TRACK'; payload: TrackInfo | null }
   | { type: 'SET_PLAYING'; payload: boolean }
-  | { type: 'SET_POSITION'; payload: { position: number; duration: number } };
+  | { type: 'SET_POSITION'; payload: { position: number; duration: number } }
+  | { type: 'SET_QUEUE'; payload: QueueState };
 
-function reducer(state: PlayerState, action: Action): PlayerState {
+function reducer(state: FullState, action: Action): FullState {
   switch (action.type) {
     case 'UPDATE':
       return { ...state, ...action.payload };
@@ -40,14 +48,16 @@ function reducer(state: PlayerState, action: Action): PlayerState {
       return { ...state, isPlaying: action.payload };
     case 'SET_POSITION':
       return { ...state, position: action.payload.position, duration: action.payload.duration };
+    case 'SET_QUEUE':
+      return { ...state, queue: action.payload };
     default:
       return state;
   }
 }
 
 interface PlayerContextValue {
-  state: PlayerState;
-  updateState: (partial: Partial<PlayerState>) => void;
+  state: FullState;
+  updateState: (partial: Partial<FullState>) => void;
 }
 
 const PlayerContext = createContext<PlayerContextValue>({
@@ -58,7 +68,7 @@ const PlayerContext = createContext<PlayerContextValue>({
 export const PlayerProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(reducer, defaultState);
 
-  const updateState = useCallback((partial: Partial<PlayerState>) => {
+  const updateState = useCallback((partial: Partial<FullState>) => {
     dispatch({ type: 'UPDATE', payload: partial });
   }, []);
 
@@ -67,11 +77,11 @@ export const PlayerProvider: FC<{ children: ReactNode }> = ({ children }) => {
     const track = getCurrentTrack();
     const playing = getIsPlaying();
     const volume = getVolume();
-    const connected = getIsConnected();
+    const conn = getIsConnected();
     const position = getPosition();
     const duration = getDuration();
 
-    dispatch({ type: 'UPDATE', payload: { track, isPlaying: playing, volume, connected, position, duration } });
+    dispatch({ type: 'UPDATE', payload: { track, isPlaying: playing, volume, connected: conn, position, duration } });
 
     // Fetch full state from backend
     void (async () => {
@@ -89,6 +99,12 @@ export const PlayerProvider: FC<{ children: ReactNode }> = ({ children }) => {
           },
         });
       }
+
+      // Fetch initial queue
+      const queueData = await apiGetQueue();
+      if (queueData) {
+        dispatch({ type: 'SET_QUEUE', payload: { tracks: queueData.tracks ?? [], position: queueData.position ?? -1 } });
+      }
     })();
 
     // Subscribe to audioManager events
@@ -98,6 +114,7 @@ export const PlayerProvider: FC<{ children: ReactNode }> = ({ children }) => {
       addVolumeListener((v) => dispatch({ type: 'UPDATE', payload: { volume: v } })),
       addPositionListener((pos, dur) => dispatch({ type: 'SET_POSITION', payload: { position: pos, duration: dur } })),
       addConnectionListener((c) => dispatch({ type: 'UPDATE', payload: { connected: c } })),
+      addQueueListener((tracks, pos) => dispatch({ type: 'SET_QUEUE', payload: { tracks, position: pos } })),
     ];
 
     return () => { unsubs.forEach((fn) => fn()); };
