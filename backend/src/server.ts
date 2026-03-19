@@ -147,6 +147,21 @@ async function main() {
 
   process.on('SIGTERM', () => void shutdown());
   process.on('SIGINT', () => void shutdown());
+
+  // Detect sleep/wake by monitoring timer drift.
+  // When the Deck sleeps, the process is frozen (SIGSTOP). On wake (SIGCONT),
+  // a setInterval tick that was supposed to fire in 5s fires after minutes.
+  // If drift > 10s, the Deck slept — pause playback.
+  let lastTick = Date.now();
+  setInterval(() => {
+    const now = Date.now();
+    const drift = now - lastTick;
+    lastTick = now;
+    if (drift > 15000) { // 5s interval + 10s tolerance
+      console.log(`[YTCast] Sleep detected (drift: ${Math.round(drift / 1000)}s). Pausing playback.`);
+      void castPlayer.pause();
+    }
+  }, 5000);
 }
 
 main().catch((err) => {
