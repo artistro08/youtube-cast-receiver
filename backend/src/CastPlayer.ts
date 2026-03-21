@@ -19,6 +19,7 @@ export class CastPlayer extends Player {
   private currentDuration: number = 0;
   private currentTrackInfo: AudioInfo | null = null;
   private playing: boolean = false;
+  private lastSenderActivity: number = 0;
   private metadataCache: Map<string, AudioInfo> = new Map();
 
   constructor(options: CastPlayerOptions) {
@@ -117,6 +118,17 @@ export class CastPlayer extends Player {
     this.currentDuration = 0;
     this.ws.broadcast('stop', {});
     this.ws.broadcast('queue', { tracks: [], position: -1 });
+  }
+
+  /** Record that a sender-initiated action occurred. */
+  markSenderActivity(): void {
+    this.lastSenderActivity = Date.now();
+  }
+
+  /** Milliseconds since the last sender-initiated action. */
+  getSenderIdleMs(): number {
+    if (this.lastSenderActivity === 0) return Infinity;
+    return Date.now() - this.lastSenderActivity;
   }
 
   getCurrentTrackInfo(): AudioInfo | null {
@@ -218,6 +230,7 @@ export class CastPlayer extends Player {
 
   protected async doPlay(video: Video, position: number): Promise<boolean> {
     try {
+      this.markSenderActivity();
       const info = await extractAudioInfo(video.id, this.ytdlpPath);
       this.currentTrackInfo = info;
       this.metadataCache.set(video.id, info);
@@ -255,6 +268,7 @@ export class CastPlayer extends Player {
   }
 
   protected async doPause(): Promise<boolean> {
+    this.markSenderActivity();
     this.playing = false;
     this.ws.broadcast('state', {
       isPlaying: false,
@@ -265,6 +279,7 @@ export class CastPlayer extends Player {
   }
 
   protected async doResume(): Promise<boolean> {
+    this.markSenderActivity();
     this.playing = true;
     this.ws.broadcast('state', {
       isPlaying: true,
@@ -275,6 +290,7 @@ export class CastPlayer extends Player {
   }
 
   protected async doStop(): Promise<boolean> {
+    this.markSenderActivity();
     this.playing = false;
     this.currentTrackInfo = null;
     this.currentPosition = 0;
@@ -284,12 +300,14 @@ export class CastPlayer extends Player {
   }
 
   protected async doSeek(position: number): Promise<boolean> {
+    this.markSenderActivity();
     this.currentPosition = position;
     this.ws.broadcast('seek', { position });
     return true;
   }
 
   protected async doSetVolume(volume: Volume): Promise<boolean> {
+    this.markSenderActivity();
     this.currentVolume = volume;
     this.ws.broadcast('volume', { value: volume.level, muted: volume.muted });
     void this.store.set('volume', volume);

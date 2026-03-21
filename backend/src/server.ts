@@ -201,6 +201,35 @@ async function main() {
       wasConnected = false;
     }
   }, 5000);
+
+  // Periodic connection health check.
+  // Catches cases where the RPC connection to YouTube silently dies
+  // (e.g. Steam Deck loses wifi) and no senderDisconnect event fires.
+  const STALE_SESSION_MS = 5 * 60 * 1000; // 5 minutes
+  setInterval(() => {
+    const sendersNow = receiver.getConnectedSenders().length > 0;
+
+    // Case 1: Library now reports 0 senders but we thought we had one
+    if (wasConnected && !sendersNow) {
+      console.log('[YTCast] Health check: senders dropped to 0, clearing playback');
+      wsManager.broadcast('connection', { phoneConnected: false });
+      castPlayer.clearOnDisconnect();
+      wasConnected = false;
+      return;
+    }
+
+    // Case 2: Stale session — library says connected but no sender activity
+    // for 5 minutes AND playback is stopped (active playback = session alive)
+    if (wasConnected && !castPlayer.isCurrentlyPlaying() && castPlayer.getSenderIdleMs() > STALE_SESSION_MS) {
+      console.log('[YTCast] Health check: no sender activity for 5m, clearing stale session');
+      wsManager.broadcast('connection', { phoneConnected: false });
+      castPlayer.clearOnDisconnect();
+      wasConnected = false;
+      return;
+    }
+
+    wasConnected = sendersNow;
+  }, 30000); // Check every 30s
 }
 
 main().catch((err) => {
