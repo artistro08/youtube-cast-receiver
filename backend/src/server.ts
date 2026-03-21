@@ -105,6 +105,7 @@ async function main() {
     console.log(`[YTCast] Phone connected: ${sender.name}`);
     wsManager.broadcast('connection', { phoneConnected: true });
     wasConnected = true;
+    castPlayer.markSenderActivity(); // seed idle clock so health check doesn't fire before first cast command
 
     // The phone sends its own volume (usually 100%) on connect, overriding
     // our persisted volume. After the connection settles, push our saved
