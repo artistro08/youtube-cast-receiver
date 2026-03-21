@@ -103,6 +103,22 @@ export class CastPlayer extends Player {
     }
   }
 
+  /**
+   * Clear player state when all senders disconnect.
+   * Stops playback and broadcasts cleared state to the frontend.
+   * Named to avoid shadowing Player.reset() from yt-cast-receiver.
+   * Idempotent — no-ops if already cleared.
+   */
+  clearOnDisconnect(): void {
+    if (!this.playing && !this.currentTrackInfo) return;
+    this.playing = false;
+    this.currentTrackInfo = null;
+    this.currentPosition = 0;
+    this.currentDuration = 0;
+    this.ws.broadcast('stop', {});
+    this.ws.broadcast('queue', { tracks: [], position: -1 });
+  }
+
   getCurrentTrackInfo(): AudioInfo | null {
     return this.currentTrackInfo;
   }
