@@ -20,6 +20,7 @@ export class CastPlayer extends Player {
   private currentTrackInfo: AudioInfo | null = null;
   private playing: boolean = false;
   private lastSenderActivity: number = 0;
+  private sessionCleared: boolean = true;
   private metadataCache: Map<string, AudioInfo> = new Map();
 
   constructor(options: CastPlayerOptions) {
@@ -116,6 +117,7 @@ export class CastPlayer extends Player {
     this.currentTrackInfo = null;
     this.currentPosition = 0;
     this.currentDuration = 0;
+    this.sessionCleared = true;
     this.ws.broadcast('stop', {});
     this.ws.broadcast('queue', { tracks: [], position: -1 });
   }
@@ -140,6 +142,7 @@ export class CastPlayer extends Player {
   }
 
   getQueueWithMetadata(): { tracks: Array<{ videoId: string; title: string; artist: string; albumArt: string; isCurrent: boolean }>; position: number } {
+    if (this.sessionCleared) return { tracks: [], position: -1 };
     const playlist = this.queue;
     const state = playlist.getState();
     const videoIds = playlist.videoIds;
@@ -231,6 +234,7 @@ export class CastPlayer extends Player {
   protected async doPlay(video: Video, position: number): Promise<boolean> {
     try {
       this.markSenderActivity();
+      this.sessionCleared = false;
       const info = await extractAudioInfo(video.id, this.ytdlpPath);
       this.currentTrackInfo = info;
       this.metadataCache.set(video.id, info);
