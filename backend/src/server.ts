@@ -96,10 +96,15 @@ async function main() {
     });
   });
 
+  // Shared connection tracking — used by senderDisconnect, sleep detection,
+  // and the periodic health check to stay in sync.
+  let wasConnected = false;
+
   // Receiver events
   receiver.on('senderConnect', (sender) => {
     console.log(`[YTCast] Phone connected: ${sender.name}`);
     wsManager.broadcast('connection', { phoneConnected: true });
+    wasConnected = true;
 
     // The phone sends its own volume (usually 100%) on connect, overriding
     // our persisted volume. After the connection settles, push our saved
@@ -117,6 +122,11 @@ async function main() {
     console.log(`[YTCast] Phone disconnected: ${sender.name} (implicit: ${implicit})`);
     const stillConnected = receiver.getConnectedSenders().length > 0;
     wsManager.broadcast('connection', { phoneConnected: stillConnected });
+    if (!stillConnected) {
+      console.log('[YTCast] No senders remaining, clearing playback and queue');
+      castPlayer.clearOnDisconnect();
+      wasConnected = false;
+    }
   });
 
   // Subscribe to Playlist events for real-time queue broadcasts
