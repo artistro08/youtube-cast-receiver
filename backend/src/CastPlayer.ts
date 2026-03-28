@@ -22,6 +22,9 @@ export class CastPlayer extends Player {
   private lastSenderActivity: number = 0;
   private sessionCleared: boolean = true;
   private metadataCache: Map<string, AudioInfo> = new Map();
+  private volumeBroadcastTimer: ReturnType<typeof setTimeout> | null = null;
+  private batchVolumeExtreme: number = 100;
+  private batchDirection: number = 0; // 1=up, -1=down, 0=undetermined
 
   constructor(options: CastPlayerOptions) {
     super();
@@ -112,7 +115,7 @@ export class CastPlayer extends Player {
    * Idempotent — no-ops if already cleared.
    */
   clearOnDisconnect(): void {
-    if (!this.playing && !this.currentTrackInfo) return;
+    if (this.sessionCleared) return;
     this.playing = false;
     this.currentTrackInfo = null;
     this.currentPosition = 0;
@@ -313,7 +316,43 @@ export class CastPlayer extends Player {
   protected async doSetVolume(volume: Volume): Promise<boolean> {
     this.markSenderActivity();
     this.currentVolume = volume;
-    this.ws.broadcast('volume', { value: volume.level, muted: volume.muted });
+
+    // The DIAL/Lounge protocol oscillates volume values after rapid changes.
+    // E.g. user presses up twice (50→55→60), then the protocol echoes 55
+    // back as an ack-correction. We track the extreme (max for up, min for
+    // down) in each batch and broadcast that, ignoring reversals.
+    const isNewBatch = !this.volumeBroadcastTimer;
+
+    if (this.volumeBroadcastTimer) {
+      clearTimeout(this.volumeBroadcastTimer);
+    }
+
+    if (isNewBatch) {
+      this.batchVolumeExtreme = volume.level;
+      this.batchDirection = 0;
+    } else if (this.batchDirection === 0) {
+      // Second+ value in batch, direction not yet determined
+      if (volume.level > this.batchVolumeExtreme) {
+        this.batchDirection = 1;
+        this.batchVolumeExtreme = volume.level;
+      } else if (volume.level < this.batchVolumeExtreme) {
+        this.batchDirection = -1;
+        this.batchVolumeExtreme = volume.level;
+      }
+    } else {
+      // Direction established — extend extreme, ignore reversals (oscillation)
+      if (this.batchDirection > 0 && volume.level > this.batchVolumeExtreme) {
+        this.batchVolumeExtreme = volume.level;
+      } else if (this.batchDirection < 0 && volume.level < this.batchVolumeExtreme) {
+        this.batchVolumeExtreme = volume.level;
+      }
+    }
+
+    this.volumeBroadcastTimer = setTimeout(() => {
+      this.volumeBroadcastTimer = null;
+      this.ws.broadcast('volume', { value: this.batchVolumeExtreme, muted: this.currentVolume.muted });
+    }, 300);
+
     void this.store.set('volume', volume);
     return true;
   }

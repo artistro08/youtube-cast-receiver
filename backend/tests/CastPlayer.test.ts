@@ -26,6 +26,7 @@ describe('CastPlayer', () => {
     it('broadcasts stop then empty queue in order', () => {
       // Put player in active state
       (player as any).playing = true;
+      (player as any).sessionCleared = false;
       (player as any).currentTrackInfo = { videoId: 'abc', title: 'Test', artist: 'Artist', albumArt: '', duration: 180, url: '' };
       (player as any).currentPosition = 42;
       (player as any).currentDuration = 180;
@@ -40,6 +41,7 @@ describe('CastPlayer', () => {
     it('clears internal state', () => {
       // Put player in active state
       (player as any).playing = true;
+      (player as any).sessionCleared = false;
       (player as any).currentTrackInfo = { videoId: 'abc', title: 'Test', artist: 'Artist', albumArt: '', duration: 180, url: '' };
       (player as any).currentPosition = 42;
       (player as any).currentDuration = 180;

@@ -114,6 +114,7 @@ function notifyVolume(vol: number) {
   if (volumeSettleTimer) clearTimeout(volumeSettleTimer);
   volumeSettleTimer = setTimeout(() => {
     volumeSettleTimer = null;
+    if (Date.now() - lastLocalVolumeChangeAt < VOLUME_SUPPRESS_MS) return;
     setAudioVolume(vol);
     volumeListeners.forEach((fn) => fn(vol));
   }, VOLUME_SETTLE_MS);
@@ -220,13 +221,17 @@ function handleWsMessage(msg: { event: string; data: any }) {
 
     case 'state': {
       if (msg.data.isPlaying && !isPlaying && audioElement) {
-        void audioElement.play().catch(() => {});
-        startProgressReporting();
+        if (audioElement.src) {
+          void audioElement.play().then(() => {
+            notifyPlayState(true);
+            startProgressReporting();
+          }).catch(() => {});
+        }
       } else if (!msg.data.isPlaying && isPlaying && audioElement) {
         audioElement.pause();
         stopProgressReporting();
+        notifyPlayState(false);
       }
-      notifyPlayState(msg.data.isPlaying);
       if (msg.data.volume !== undefined) {
         notifyVolume(msg.data.volume);
       }
@@ -388,6 +393,9 @@ export function initAudio() {
     document.body.appendChild(audioElement);
   }
 
+  audioElement.removeEventListener('ended', onAudioEnded);
+  audioElement.removeEventListener('error', onAudioError);
+  audioElement.removeEventListener('pause', onAudioPause);
   audioElement.addEventListener('ended', onAudioEnded);
   audioElement.addEventListener('error', onAudioError);
   audioElement.addEventListener('pause', onAudioPause);

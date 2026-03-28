@@ -58,6 +58,10 @@ class Plugin:
                     logger.error("Backend process ended before signaling READY.")
             except asyncio.TimeoutError:
                 logger.error("Backend did not signal READY within 30 seconds.")
+                if self.node_process:
+                    self.node_process.kill()
+                    self.node_process = None
+                return
 
             # Continue reading stdout and stderr in background for logging
             async def log_stream(stream, level_fn):
@@ -84,7 +88,7 @@ class Plugin:
                 except subprocess.TimeoutExpired:
                     logger.warning("Backend did not stop gracefully, killing...")
                     self.node_process.kill()
-                    self.node_process.wait(timeout=2)
+                    self.node_process.wait()
             except Exception as e:
                 logger.error(f"Error stopping backend: {e}")
             finally:

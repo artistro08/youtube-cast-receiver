@@ -101,6 +101,7 @@ function parseBody(req: IncomingMessage): Promise<any> {
 
     let body = '';
     let oversized = false;
+    req.on('error', () => resolve({}));
     req.on('data', (chunk: Buffer) => {
       if (oversized) return;
       body += chunk.toString();

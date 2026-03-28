@@ -32,7 +32,10 @@ export class JsonDataStore extends DataStore {
     try {
       const content = fs.readFileSync(this.filePath, 'utf-8');
       return JSON.parse(content);
-    } catch {
+    } catch (err: any) {
+      if (err?.code !== 'ENOENT') {
+        console.error('[YTCast] DataStore: failed to load (corrupt file?), starting empty:', err);
+      }
       return {};
     }
   }
@@ -61,7 +64,9 @@ export class JsonDataStore extends DataStore {
           await fsp.mkdir(path.dirname(this.filePath), { recursive: true });
           this.dirEnsured = true;
         }
-        await fsp.writeFile(this.filePath, JSON.stringify(this.data, null, 2), 'utf-8');
+        const tmp = this.filePath + '.tmp';
+        await fsp.writeFile(tmp, JSON.stringify(this.data, null, 2), 'utf-8');
+        await fsp.rename(tmp, this.filePath);
       } catch (err) {
         console.error('[YTCast] Failed to save datastore:', err);
       }
