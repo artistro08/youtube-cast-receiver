@@ -4,7 +4,8 @@
 
 $ErrorActionPreference = "Stop"
 
-$PluginName = "youtube-cast-receiver"
+$PluginName = "YouTube Cast Receiver"   # Must match plugin.json "name" exactly
+$ZipSlug   = "youtube-cast-receiver"    # Used for the output ZIP filename
 $NodeVersion = "v20.18.3"
 $NodeUrl = "https://nodejs.org/dist/$NodeVersion/node-$NodeVersion-linux-x64.tar.xz"
 $YtdlpUrl = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
@@ -13,7 +14,7 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BinDir = Join-Path $ScriptDir "bin"
 $StagingDir = Join-Path $ScriptDir "staging"
 $PluginDir = Join-Path $StagingDir $PluginName
-$ZipPath = Join-Path $ScriptDir "$PluginName.zip"
+$ZipPath = Join-Path $ScriptDir "$ZipSlug.zip"
 
 Write-Host "=== YouTube Cast Receiver Build Script ===" -ForegroundColor Cyan
 
