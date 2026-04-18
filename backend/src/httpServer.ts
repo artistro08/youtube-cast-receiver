@@ -6,6 +6,11 @@ interface RouteContext {
   castPlayer: CastPlayer;
   libraryPlayer: YtPlayer;
   isConnected: () => boolean;
+  receiver: {
+    enable(): Promise<void>;
+    disable(): Promise<void>;
+    isEnabled(): boolean;
+  };
 }
 
 type RouteHandler = (body: any, ctx: RouteContext) => Promise<unknown>;
@@ -13,6 +18,8 @@ type RouteHandler = (body: any, ctx: RouteContext) => Promise<unknown>;
 const routes: Record<string, Record<string, RouteHandler>> = {
   GET: {
     '/api/health': async () => ({ ready: true }),
+
+    '/api/receiver/status': async (_body, ctx) => ({ enabled: ctx.receiver.isEnabled() }),
 
     '/api/state': async (_body, ctx) => {
       const trackInfo = ctx.castPlayer.getCurrentTrackInfo();
@@ -86,6 +93,16 @@ const routes: Record<string, Record<string, RouteHandler>> = {
 
     '/api/queue/remove': async (_body, _ctx) => {
       return { ok: false, message: 'Queue is managed from your phone' };
+    },
+
+    '/api/receiver/enable': async (_body, ctx) => {
+      await ctx.receiver.enable();
+      return { ok: true };
+    },
+
+    '/api/receiver/disable': async (_body, ctx) => {
+      await ctx.receiver.disable();
+      return { ok: true };
     },
   },
 };

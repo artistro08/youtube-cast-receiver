@@ -1,9 +1,14 @@
-import { DialogButton, Focusable } from '@decky/ui';
+import { useState, useEffect } from 'react';
+import { DialogButton, Focusable, ToggleField } from '@decky/ui';
 import { FaMusic } from 'react-icons/fa';
 import { FaPause } from 'react-icons/fa';
 import { IoPlay, IoPlaySkipBack, IoPlaySkipForward } from 'react-icons/io5';
 import { usePlayer } from '../context/PlayerContext';
-import { togglePlayback, apiNext, apiPrev } from '../services/audioManager';
+import {
+  togglePlayback, apiNext, apiPrev,
+  getReceiverEnabled, addReceiverStatusListener,
+  apiReceiverEnable, apiReceiverDisable,
+} from '../services/audioManager';
 import { Section } from './Section';
 import { VolumeSlider } from './VolumeSlider';
 import { ProgressBar } from './ProgressBar';
@@ -24,6 +29,20 @@ const transBtnLast: React.CSSProperties = { ...btnBase, height: '33px', borderRa
 
 export const PlayerView = () => {
   const { track, isPlaying, connected } = usePlayer();
+  const [receiverEnabled, setReceiverEnabled] = useState(getReceiverEnabled());
+
+  useEffect(() => {
+    return addReceiverStatusListener(setReceiverEnabled);
+  }, []);
+
+  const handleReceiverToggle = async (enabled: boolean) => {
+    setReceiverEnabled(enabled); // optimistic
+    if (enabled) {
+      await apiReceiverEnable();
+    } else {
+      await apiReceiverDisable();
+    }
+  };
 
   const albumArt = track?.albumArt;
   const title = track?.title ?? (connected ? 'Waiting for cast...' : 'Not connected');
@@ -86,6 +105,16 @@ export const PlayerView = () => {
       {/* Volume */}
       <Section>
         <VolumeSlider />
+      </Section>
+
+      {/* Cast receiver toggle */}
+      <Section>
+        <ToggleField
+          label="Cast Receiver"
+          description="Advertise this device on the network for casting"
+          checked={receiverEnabled}
+          onChange={(v) => { void handleReceiverToggle(v); }}
+        />
       </Section>
     </>
   );

@@ -68,6 +68,26 @@ async function main() {
     logLevel: 'info',
   });
 
+  // Receiver on/off control (start = advertise on network, stop = go dark)
+  let receiverEnabled = false; // true after receiver.start() below
+  const receiverControl = {
+    enable: async () => {
+      if (!receiverEnabled) {
+        await receiver.start();
+        receiverEnabled = true;
+        console.log('[YTCast] Cast receiver enabled (advertising on network)');
+      }
+    },
+    disable: async () => {
+      if (receiverEnabled) {
+        await receiver.stop();
+        receiverEnabled = false;
+        console.log('[YTCast] Cast receiver disabled (no longer advertising)');
+      }
+    },
+    isEnabled: () => receiverEnabled,
+  };
+
   // Handle WebSocket messages from frontend
   wsManager.onMessage((msg) => {
     switch (msg.event) {
@@ -93,6 +113,7 @@ async function main() {
       castPlayer,
       libraryPlayer: castPlayer,
       isConnected: () => receiver.getConnectedSenders().length > 0,
+      receiver: receiverControl,
     });
   });
 
@@ -167,6 +188,7 @@ async function main() {
 
   // Start the cast receiver (DIAL/SSDP advertisement)
   await receiver.start();
+  receiverEnabled = true;
   console.log(`[YTCast] Cast receiver started. Device name: "${deviceName}"`);
 
   // Signal readiness to main.py

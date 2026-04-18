@@ -17,6 +17,7 @@ let currentTrack: TrackInfo | null = null;
 let isPlaying = false;
 let currentVolume = 100;
 let connected = false;
+let receiverEnabled = true;
 
 // Suppression window for local volume changes (ms).
 // WS echoes arriving within this window after a local change are ignored.
@@ -39,6 +40,7 @@ type VolumeListener = (volume: number) => void;
 type PositionListener = (position: number, duration: number) => void;
 type ConnectionListener = (connected: boolean) => void;
 type QueueListener = (tracks: any[], position: number) => void;
+type ReceiverStatusListener = (enabled: boolean) => void;
 
 let trackListeners: TrackListener[] = [];
 let playStateListeners: PlayStateListener[] = [];
@@ -46,6 +48,7 @@ let volumeListeners: VolumeListener[] = [];
 let positionListeners: PositionListener[] = [];
 let connectionListeners: ConnectionListener[] = [];
 let queueListeners: QueueListener[] = [];
+let receiverStatusListeners: ReceiverStatusListener[] = [];
 
 export function addTrackListener(fn: TrackListener): () => void {
   trackListeners.push(fn);
@@ -77,12 +80,18 @@ export function addQueueListener(fn: QueueListener): () => void {
   return () => { queueListeners = queueListeners.filter((l) => l !== fn); };
 }
 
+export function addReceiverStatusListener(fn: ReceiverStatusListener): () => void {
+  receiverStatusListeners.push(fn);
+  return () => { receiverStatusListeners = receiverStatusListeners.filter((l) => l !== fn); };
+}
+
 // --- Getters ---
 
 export function getCurrentTrack(): TrackInfo | null { return currentTrack; }
 export function getIsPlaying(): boolean { return isPlaying; }
 export function getVolume(): number { return currentVolume; }
 export function getIsConnected(): boolean { return connected; }
+export function getReceiverEnabled(): boolean { return receiverEnabled; }
 export function getPosition(): number {
   return audioElement ? audioElement.currentTime : 0;
 }
@@ -133,6 +142,11 @@ function notifyQueue(tracks: any[], position: number) {
   queueListeners.forEach((fn) => fn(tracks, position));
 }
 
+function notifyReceiverStatus(enabled: boolean) {
+  receiverEnabled = enabled;
+  receiverStatusListeners.forEach((fn) => fn(enabled));
+}
+
 // --- WebSocket ---
 
 function sendWs(event: string, data: unknown = {}) {
@@ -163,6 +177,9 @@ function connectWebSocket() {
     });
     void apiGetQueue().then((data) => {
       if (data) notifyQueue(data.tracks ?? [], data.position ?? -1);
+    });
+    void apiGetReceiverStatus().then((data) => {
+      if (data?.enabled !== undefined) notifyReceiverStatus(data.enabled);
     });
   };
 
@@ -371,6 +388,9 @@ export async function apiSeek(position: number) { return apiPost('/api/seek', { 
 export async function apiSetVolume(volume: number) { return apiPost('/api/volume', { volume }); }
 export async function apiGetState() { return apiGet('/api/state'); }
 export async function apiGetQueue() { return apiGet('/api/queue'); }
+export async function apiGetReceiverStatus() { return apiGet('/api/receiver/status'); }
+export async function apiReceiverEnable() { return apiPost('/api/receiver/enable'); }
+export async function apiReceiverDisable() { return apiPost('/api/receiver/disable'); }
 
 export function togglePlayback() {
   if (isPlaying) {
@@ -444,4 +464,5 @@ export function destroyAudio() {
   positionListeners = [];
   connectionListeners = [];
   queueListeners = [];
+  receiverStatusListeners = [];
 }
