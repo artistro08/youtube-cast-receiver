@@ -6,7 +6,7 @@ import { IoPlay, IoPlaySkipBack, IoPlaySkipForward } from 'react-icons/io5';
 import { usePlayer } from '../context/PlayerContext';
 import {
   togglePlayback, apiNext, apiPrev,
-  getReceiverEnabled, addReceiverStatusListener,
+  getReceiverEnabled, addReceiverStatusListener, notifyReceiverStatus,
   apiReceiverEnable, apiReceiverDisable,
 } from '../services/audioManager';
 import { Section } from './Section';
@@ -58,7 +58,7 @@ export const PlayerView = () => {
   }, []);
 
   const handleReceiverToggle = async (enabled: boolean) => {
-    setReceiverEnabled(enabled); // optimistic
+    notifyReceiverStatus(enabled); // update module-level state so it persists across panel close/open
     if (enabled) {
       await apiReceiverEnable();
     } else {

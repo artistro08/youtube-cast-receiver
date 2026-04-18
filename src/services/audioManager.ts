@@ -142,7 +142,7 @@ function notifyQueue(tracks: any[], position: number) {
   queueListeners.forEach((fn) => fn(tracks, position));
 }
 
-function notifyReceiverStatus(enabled: boolean) {
+export function notifyReceiverStatus(enabled: boolean) {
   receiverEnabled = enabled;
   receiverStatusListeners.forEach((fn) => fn(enabled));
 }
