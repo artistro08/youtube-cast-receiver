@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { DialogButton, Focusable, ToggleField } from '@decky/ui';
 import { FaMusic } from 'react-icons/fa';
 import { FaPause } from 'react-icons/fa';
@@ -12,6 +12,28 @@ import {
 import { Section } from './Section';
 import { VolumeSlider } from './VolumeSlider';
 import { ProgressBar } from './ProgressBar';
+
+const PaddedToggle = ({ label, description, checked, onChange }: {
+  label: string;
+  description?: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) => {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!ref.current) return;
+    const firstChild = ref.current.firstElementChild as HTMLElement | null;
+    if (firstChild) {
+      firstChild.style.paddingLeft = '19px';
+      firstChild.style.paddingRight = '19px';
+    }
+  }, []);
+  return (
+    <div ref={ref}>
+      <ToggleField label={label} description={description} checked={checked} onChange={onChange} />
+    </div>
+  );
+};
 
 const btnBase: React.CSSProperties = {
   display: 'flex',
@@ -109,7 +131,7 @@ export const PlayerView = () => {
 
       {/* Cast receiver toggle */}
       <Section>
-        <ToggleField
+        <PaddedToggle
           label="Cast Receiver"
           description="Advertise this device on the network for casting"
           checked={receiverEnabled}
