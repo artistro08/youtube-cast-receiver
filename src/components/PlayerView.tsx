@@ -68,7 +68,9 @@ export const PlayerView = () => {
 
   const albumArt = track?.albumArt;
   const title = track?.title ?? (connected ? 'Waiting for cast...' : 'Not connected');
-  const artist = track?.artist ?? (connected ? 'Cast a video from your phone' : 'Open YouTube and cast to this device');
+  const artist = track?.artist ?? (connected
+    ? 'Cast a video from YouTube Music or YouTube to start playing'
+    : 'Open YouTube Music or YouTube and cast to this device');
 
   return (
     <>
@@ -132,8 +134,8 @@ export const PlayerView = () => {
       {/* Cast receiver toggle */}
       <Section>
         <PaddedToggle
-          label="Cast Receiver"
-          description="Advertise this device on the network for casting"
+          label="Receiver Enabled"
+          description="Advertise your Steam Deck on the network for casting"
           checked={receiverEnabled}
           onChange={(v) => { void handleReceiverToggle(v); }}
         />
