@@ -1,6 +1,6 @@
 {
   "name": "youtube-cast-receiver",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "YouTube Cast Receiver for Steam Deck via Decky Loader",
   "type": "module",
   "scripts": {

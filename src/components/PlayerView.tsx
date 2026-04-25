@@ -6,8 +6,9 @@ import { IoPlay, IoPlaySkipBack, IoPlaySkipForward } from 'react-icons/io5';
 import { usePlayer } from '../context/PlayerContext';
 import {
   togglePlayback, apiNext, apiPrev,
-  getReceiverEnabled, addReceiverStatusListener, notifyReceiverStatus,
-  apiReceiverEnable, apiReceiverDisable,
+  getNetworkInfo, addNetworkListener,
+  apiTrustNetwork, apiUntrustNetwork,
+  type NetworkInfo,
 } from '../services/audioManager';
 import { Section } from './Section';
 import { VolumeSlider } from './VolumeSlider';
@@ -51,20 +52,22 @@ const transBtnLast: React.CSSProperties = { ...btnBase, height: '33px', borderRa
 
 export const PlayerView = () => {
   const { track, isPlaying, connected } = usePlayer();
-  const [receiverEnabled, setReceiverEnabled] = useState(getReceiverEnabled());
+  const [network, setNetwork] = useState<NetworkInfo>(getNetworkInfo());
 
-  useEffect(() => {
-    return addReceiverStatusListener(setReceiverEnabled);
-  }, []);
+  useEffect(() => addNetworkListener(setNetwork), []);
 
-  const handleReceiverToggle = async (enabled: boolean) => {
-    notifyReceiverStatus(enabled); // update module-level state so it persists across panel close/open
-    if (enabled) {
-      await apiReceiverEnable();
+  const handleTrustToggle = async (trusted: boolean) => {
+    setNetwork({ ...network, trusted });
+    if (trusted) {
+      await apiTrustNetwork();
     } else {
-      await apiReceiverDisable();
+      await apiUntrustNetwork();
     }
   };
+
+  const trustDescription = network.name
+    ? `Currently on "${network.name}". Receiver runs only on trusted networks.`
+    : 'No network detected';
 
   const albumArt = track?.albumArt;
   const title = track?.title ?? (connected ? 'Waiting for cast...' : 'Not connected');
@@ -129,12 +132,13 @@ export const PlayerView = () => {
         <VolumeSlider />
       </Section>
 
-      {/* Cast receiver toggle */}
+      {/* Trust this network toggle — receiver runs while connected to a trusted network */}
       <Section>
         <PaddedToggle
-          label="Receiver Enabled"
-          checked={receiverEnabled}
-          onChange={(v) => { void handleReceiverToggle(v); }}
+          label="Trust this network"
+          description={trustDescription}
+          checked={network.trusted}
+          onChange={(v) => { void handleTrustToggle(v); }}
         />
       </Section>
     </>

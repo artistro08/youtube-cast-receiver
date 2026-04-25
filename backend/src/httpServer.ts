@@ -2,14 +2,20 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { CastPlayer } from './CastPlayer.js';
 import type { Player as YtPlayer } from 'yt-cast-receiver';
 
+interface NetworkSnapshot {
+  uuid: string | null;
+  name: string | null;
+  trusted: boolean;
+}
+
 interface RouteContext {
   castPlayer: CastPlayer;
   libraryPlayer: YtPlayer;
   isConnected: () => boolean;
-  receiver: {
-    enable(): Promise<void>;
-    disable(): Promise<void>;
-    isEnabled(): boolean;
+  network: {
+    getCurrent(): NetworkSnapshot;
+    trust(): Promise<boolean>;
+    untrust(): Promise<boolean>;
   };
 }
 
@@ -19,7 +25,7 @@ const routes: Record<string, Record<string, RouteHandler>> = {
   GET: {
     '/api/health': async () => ({ ready: true }),
 
-    '/api/receiver/status': async (_body, ctx) => ({ enabled: ctx.receiver.isEnabled() }),
+    '/api/network/current': async (_body, ctx) => ctx.network.getCurrent(),
 
     '/api/state': async (_body, ctx) => {
       const trackInfo = ctx.castPlayer.getCurrentTrackInfo();
@@ -95,14 +101,14 @@ const routes: Record<string, Record<string, RouteHandler>> = {
       return { ok: false, message: 'Queue is managed from your phone' };
     },
 
-    '/api/receiver/enable': async (_body, ctx) => {
-      await ctx.receiver.enable();
-      return { ok: true };
+    '/api/network/trust': async (_body, ctx) => {
+      const ok = await ctx.network.trust();
+      return { ok };
     },
 
-    '/api/receiver/disable': async (_body, ctx) => {
-      await ctx.receiver.disable();
-      return { ok: true };
+    '/api/network/untrust': async (_body, ctx) => {
+      const ok = await ctx.network.untrust();
+      return { ok };
     },
   },
 };
