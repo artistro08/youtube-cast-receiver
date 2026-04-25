@@ -7,6 +7,7 @@ import { JsonDataStore } from './JsonDataStore.js';
 import { WsManager } from './wsManager.js';
 import { handleRequest } from './httpServer.js';
 import { selfUpdate } from './ytdlp.js';
+import { getCurrentNetwork, type ActiveNetwork } from './network.js';
 
 const PORT = 39281;
 
@@ -71,40 +72,92 @@ async function main() {
     logLevel: 'info',
   });
 
-  // Receiver on/off control. Persisted across reboots via dataStore.
-  // Default disabled — user opts in via the player toggle.
+  // Single state model:
+  //   - trustedNetworks (persisted) — connection NAMEs the user marked as trusted.
+  //     We match by name (e.g. SSID for wifi, "Wired connection 1" for ethernet)
+  //     because NetworkManager UUIDs can rotate when connections are re-added,
+  //     while names are user-meaningful and stable across reconnects.
+  //   - currentNetwork (live) — UUID/name of the active connection
+  //   - advertising (live) — whether SSDP/DIAL is actually running
+  //
+  // Receiver advertises iff currentNetwork.name is in trustedNetworks.
+  // Empty list (or untrusted current network) = receiver off.
+  // Migration: drop legacy UUID-keyed list (incompatible matching).
+  let trustedNetworks: string[] = (await dataStore.get<string[]>('network.trusted.names')) ?? [];
+  let currentNetwork: ActiveNetwork | null = null;
   let advertising = false;
   let shuttingDown = false;
   const intervals: ReturnType<typeof setInterval>[] = [];
+  console.log(`[YTCast] Loaded trusted networks: [${trustedNetworks.map((n) => `"${n}"`).join(', ')}]`);
 
-  const receiverControl = {
-    enable: async () => {
-      if (shuttingDown || advertising) return;
-      try {
-        await receiver.start();
-        advertising = true;
-        await dataStore.set('receiver.enabled', true);
-        console.log('[YTCast] Cast receiver enabled (advertising on network)');
-      } catch (err) {
-        console.error('[YTCast] receiver.start() failed:', (err as Error)?.message ?? err);
-        throw err;
-      }
-    },
-    disable: async () => {
-      if (!advertising) {
-        await dataStore.set('receiver.enabled', false);
-        return;
-      }
-      try {
-        await receiver.stop();
-      } catch (err) {
-        console.error('[YTCast] receiver.stop() failed:', (err as Error)?.message ?? err);
-      }
+  const reconcile = async (): Promise<void> => {
+    if (shuttingDown) return;
+    const shouldRun = !!currentNetwork && trustedNetworks.includes(currentNetwork.name);
+    console.log(
+      `[YTCast] Reconcile: currentNetwork=${currentNetwork?.name ?? '(none)'} ` +
+      `trusted=${shouldRun} advertising=${advertising} -> shouldRun=${shouldRun}`
+    );
+    if (shouldRun && !advertising) {
+      await receiver.start();
+      advertising = true;
+      console.log('[YTCast] Cast receiver advertising (reconcile: on)');
+    } else if (!shouldRun && advertising) {
+      await receiver.stop();
       advertising = false;
-      await dataStore.set('receiver.enabled', false);
-      console.log('[YTCast] Cast receiver disabled (no longer advertising)');
+      console.log('[YTCast] Cast receiver stopped advertising (reconcile: off)');
+    }
+  };
+
+  // Serialize reconcile calls so user toggle + network poll can't race two
+  // overlapping receiver.start()/stop() calls. Also no-ops post-shutdown.
+  let reconcileInflight: Promise<void> = Promise.resolve();
+  const safeReconcile = (): Promise<void> => {
+    if (shuttingDown) return Promise.resolve();
+    reconcileInflight = reconcileInflight.then(() => reconcile()).catch((err) => {
+      console.error('[YTCast] Reconcile failed:', err);
+    });
+    return reconcileInflight;
+  };
+
+  const broadcastNetwork = (): void => {
+    wsManager.broadcast('network', {
+      uuid: currentNetwork?.uuid ?? null,
+      name: currentNetwork?.name ?? null,
+      trusted: !!currentNetwork && trustedNetworks.includes(currentNetwork.name),
+    });
+  };
+
+  const networkControl = {
+    getCurrent: () => ({
+      uuid: currentNetwork?.uuid ?? null,
+      name: currentNetwork?.name ?? null,
+      trusted: !!currentNetwork && trustedNetworks.includes(currentNetwork.name),
+    }),
+    trust: async () => {
+      if (!currentNetwork) return false;
+      const name = currentNetwork.name;
+      if (trustedNetworks.includes(name)) return true;
+      trustedNetworks = [...trustedNetworks, name];
+      console.log(`[YTCast] Trusting network "${name}". List now: [${trustedNetworks.map((n) => `"${n}"`).join(', ')}]`);
+      await dataStore.set('network.trusted.names', trustedNetworks);
+      await dataStore.flush(); // force immediate disk write so reboots persist
+      await safeReconcile();
+      broadcastNetwork();
+      return true;
     },
-    isEnabled: () => advertising,
+    untrust: async () => {
+      if (!currentNetwork) return false;
+      const name = currentNetwork.name;
+      const before = trustedNetworks.length;
+      trustedNetworks = trustedNetworks.filter((n) => n !== name);
+      if (trustedNetworks.length === before) return true;
+      console.log(`[YTCast] Untrusting network "${name}". List now: [${trustedNetworks.map((n) => `"${n}"`).join(', ')}]`);
+      await dataStore.set('network.trusted.names', trustedNetworks);
+      await dataStore.flush();
+      await safeReconcile();
+      broadcastNetwork();
+      return true;
+    },
   };
 
   // Handle WebSocket messages from frontend
@@ -132,7 +185,7 @@ async function main() {
       castPlayer,
       libraryPlayer: castPlayer,
       isConnected: () => receiver.getConnectedSenders().length > 0,
-      receiver: receiverControl,
+      network: networkControl,
     });
   });
 
@@ -205,21 +258,19 @@ async function main() {
     });
   });
 
-  // Start the cast receiver only if the user has enabled it (persisted).
-  // Best-effort: if YouTube fetch fails (DNS not ready at boot), log and
-  // let the user toggle off/on or the next reboot retry. We never let
-  // a startup failure take down the plugin.
-  const persistedEnabled = (await dataStore.get<boolean>('receiver.enabled')) === true;
-  if (persistedEnabled) {
-    try {
-      await receiverControl.enable();
-      console.log(`[YTCast] Cast receiver started (persisted enabled). Device name: "${deviceName}"`);
-    } catch (err) {
-      console.error('[YTCast] Initial receiver start failed (toggle off/on to retry):', (err as Error)?.message ?? err);
-    }
+  // Detect current network and reconcile receiver state on startup.
+  // Receiver advertises iff current network's name is in trustedNetworks.
+  currentNetwork = await getCurrentNetwork();
+  if (currentNetwork) {
+    console.log(`[YTCast] Active network: name="${currentNetwork.name}" uuid=${currentNetwork.uuid} type=${currentNetwork.type}`);
   } else {
-    console.log(`[YTCast] Cast receiver disabled at startup (toggle on to advertise). Device name: "${deviceName}"`);
+    console.log('[YTCast] No active network detected at startup (nmcli unavailable or no active connection)');
   }
+  await reconcile();
+  console.log(
+    `[YTCast] Cast receiver ${advertising ? 'advertising' : 'idle'}. ` +
+    `trustedNetworks=${trustedNetworks.length} Device name: "${deviceName}"`
+  );
 
   // Signal readiness to main.py
   console.log('READY');
@@ -291,10 +342,10 @@ async function main() {
   // Periodic connection health check.
   // Catches cases where the RPC connection to YouTube silently dies
   // (e.g. Steam Deck loses wifi) and no senderDisconnect event fires.
-  // Stale-session timeout is 30 min — paused tracks count as idle, and
-  // a shorter timeout was clearing sessions for users who paused briefly.
-  // Case 1 (library reports 0 senders) still fires immediately for
-  // genuine disconnects; the stale check is the fallback for silent RPC death.
+  // Bumped from 5 min to 30 min — paused tracks count as idle, and 5 min
+  // was clearing the session for users who paused and walked away briefly.
+  // Case 1 (library reports 0 senders) still fires immediately for genuine
+  // disconnects; this stale check is the fallback for silent RPC death.
   const STALE_SESSION_MS = 30 * 60 * 1000;
   intervals.push(setInterval(() => {
     if (shuttingDown) return;
@@ -310,9 +361,9 @@ async function main() {
     }
 
     // Case 2: Stale session — library says connected but no sender activity
-    // for 30 minutes AND playback is stopped (active playback = session alive)
+    // for 5 minutes AND playback is stopped (active playback = session alive)
     if (wasConnected && !castPlayer.isCurrentlyPlaying() && castPlayer.getSenderIdleMs() > STALE_SESSION_MS) {
-      console.log('[YTCast] Health check: no sender activity for 30m, clearing stale session');
+      console.log('[YTCast] Health check: no sender activity for 5m, clearing stale session');
       wsManager.broadcast('connection', { phoneConnected: false });
       castPlayer.clearOnDisconnect();
       wasConnected = false;
@@ -321,6 +372,35 @@ async function main() {
 
     wasConnected = sendersNow;
   }, 30000)); // Check every 30s
+
+  // Network change detection — poll the active connection every 10s.
+  // If the network changes (different UUID, or appeared/disappeared),
+  // re-run reconcile so the trust feature can flip the receiver on/off.
+  const NETWORK_POLL_MS = 10000;
+  intervals.push(setInterval(() => {
+    if (shuttingDown) return;
+    void (async () => {
+      if (shuttingDown) return;
+      const next = await getCurrentNetwork();
+      if (shuttingDown) return;
+      // Match on name (which is what trustedNetworks stores). Also account
+      // for uuid changes for the same name — both should trigger a refresh
+      // since SSDP needs to rebind on a different network interface.
+      const prevName = currentNetwork?.name ?? null;
+      const nextName = next?.name ?? null;
+      const prevUuid = currentNetwork?.uuid ?? null;
+      const nextUuid = next?.uuid ?? null;
+      if (prevName !== nextName || prevUuid !== nextUuid) {
+        currentNetwork = next;
+        console.log(
+          `[YTCast] Network changed: "${prevName ?? '(none)'}" (${prevUuid ?? '-'}) -> ` +
+          `"${nextName ?? '(none)'}" (${nextUuid ?? '-'})`
+        );
+        await safeReconcile();
+        broadcastNetwork();
+      }
+    })();
+  }, NETWORK_POLL_MS));
 }
 
 main().catch((err) => {
