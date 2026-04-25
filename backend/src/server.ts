@@ -86,6 +86,11 @@ async function main() {
   let trustedNetworks: string[] = (await dataStore.get<string[]>('network.trusted.names')) ?? [];
   let currentNetwork: ActiveNetwork | null = null;
   let advertising = false;
+  // UUID of the network the receiver is currently bound to. SSDP/DIAL
+  // multicast sockets are interface-specific — switching networks while
+  // advertising leaves the socket on the old interface (advertising into
+  // the void). When this differs from currentNetwork.uuid, we restart.
+  let boundNetworkUuid: string | null = null;
   let shuttingDown = false;
   const intervals: ReturnType<typeof setInterval>[] = [];
   console.log(`[YTCast] Loaded trusted networks: [${trustedNetworks.map((n) => `"${n}"`).join(', ')}]`);
@@ -93,29 +98,62 @@ async function main() {
   const reconcile = async (): Promise<void> => {
     if (shuttingDown) return;
     const shouldRun = !!currentNetwork && trustedNetworks.includes(currentNetwork.name);
-    console.log(
-      `[YTCast] Reconcile: currentNetwork=${currentNetwork?.name ?? '(none)'} ` +
-      `trusted=${shouldRun} advertising=${advertising} -> shouldRun=${shouldRun}`
-    );
-    if (shouldRun && !advertising) {
-      await receiver.start();
-      advertising = true;
-      console.log('[YTCast] Cast receiver advertising (reconcile: on)');
-    } else if (!shouldRun && advertising) {
+
+    // Case 0: advertising on a different network than current — rebind.
+    // Fires when switching between two trusted networks; without this,
+    // SSDP keeps broadcasting on the old interface.
+    if (shouldRun && advertising && currentNetwork && boundNetworkUuid !== currentNetwork.uuid) {
+      console.log(
+        `[YTCast] Reconcile: rebinding receiver to "${currentNetwork.name}" ` +
+        `(was bound to ${boundNetworkUuid ?? '(none)'})`
+      );
       await receiver.stop();
       advertising = false;
-      console.log('[YTCast] Cast receiver stopped advertising (reconcile: off)');
+      boundNetworkUuid = null;
+    }
+
+    // Only log when something actually changes — reconcile fires every
+    // 10s on the network poll, so steady-state silence is the goal.
+    if (shouldRun && !advertising) {
+      console.log(`[YTCast] Reconcile: starting receiver on "${currentNetwork?.name}"`);
+      await receiver.start();
+      advertising = true;
+      boundNetworkUuid = currentNetwork!.uuid;
+      console.log('[YTCast] Cast receiver advertising');
+    } else if (!shouldRun && advertising) {
+      console.log(
+        `[YTCast] Reconcile: stopping receiver (currentNetwork=${currentNetwork?.name ?? '(none)'} trusted=${shouldRun})`
+      );
+      await receiver.stop();
+      advertising = false;
+      boundNetworkUuid = null;
+      console.log('[YTCast] Cast receiver stopped advertising');
     }
   };
 
   // Serialize reconcile calls so user toggle + network poll can't race two
   // overlapping receiver.start()/stop() calls. Also no-ops post-shutdown.
+  // Suppresses repeated identical error messages so retry-spam doesn't
+  // flood logs (we retry every 10s on poll).
   let reconcileInflight: Promise<void> = Promise.resolve();
+  let lastReconcileErrorMessage: string | null = null;
   const safeReconcile = (): Promise<void> => {
     if (shuttingDown) return Promise.resolve();
-    reconcileInflight = reconcileInflight.then(() => reconcile()).catch((err) => {
-      console.error('[YTCast] Reconcile failed:', err);
-    });
+    reconcileInflight = reconcileInflight
+      .then(() => reconcile())
+      .then(() => {
+        if (lastReconcileErrorMessage !== null) {
+          console.log('[YTCast] Reconcile recovered after prior failure');
+          lastReconcileErrorMessage = null;
+        }
+      })
+      .catch((err) => {
+        const msg = (err as Error)?.message ?? String(err);
+        if (msg !== lastReconcileErrorMessage) {
+          console.error('[YTCast] Reconcile failed:', msg);
+          lastReconcileErrorMessage = msg;
+        }
+      });
     return reconcileInflight;
   };
 
@@ -266,7 +304,16 @@ async function main() {
   } else {
     console.log('[YTCast] No active network detected at startup (nmcli unavailable or no active connection)');
   }
-  await reconcile();
+  // Initial reconcile is best-effort. At Steam Deck boot, NetworkManager
+  // reports the wifi as "active" before DNS/internet is fully reachable,
+  // so receiver.start() can fail with fetch errors against YouTube's API.
+  // We must NOT let that take down the plugin — log it and let the poll
+  // loop retry every 10s.
+  try {
+    await reconcile();
+  } catch (err) {
+    console.error('[YTCast] Initial reconcile failed (will retry on poll):', err);
+  }
   console.log(
     `[YTCast] Cast receiver ${advertising ? 'advertising' : 'idle'}. ` +
     `trustedNetworks=${trustedNetworks.length} Device name: "${deviceName}"`
@@ -390,15 +437,18 @@ async function main() {
       const nextName = next?.name ?? null;
       const prevUuid = currentNetwork?.uuid ?? null;
       const nextUuid = next?.uuid ?? null;
-      if (prevName !== nextName || prevUuid !== nextUuid) {
+      const networkChanged = prevName !== nextName || prevUuid !== nextUuid;
+      if (networkChanged) {
         currentNetwork = next;
         console.log(
           `[YTCast] Network changed: "${prevName ?? '(none)'}" (${prevUuid ?? '-'}) -> ` +
           `"${nextName ?? '(none)'}" (${nextUuid ?? '-'})`
         );
-        await safeReconcile();
         broadcastNetwork();
       }
+      // Always run reconcile — handles retries when initial start failed.
+      // Reconcile is idempotent and safeReconcile catches throws.
+      await safeReconcile();
     })();
   }, NETWORK_POLL_MS));
 }
