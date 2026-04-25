@@ -2,6 +2,7 @@ import os
 import signal
 import subprocess
 import logging
+import asyncio
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("YTCast")
@@ -26,16 +27,20 @@ class Plugin:
             os.chmod(yt_dlp_bin, 0o755)
 
         try:
+            # start_new_session=True puts Node (and any children it spawns,
+            # like yt-dlp) into its own process group / session. This lets us
+            # kill the entire group on _unload, so orphaned yt-dlp processes
+            # don't keep bin/yt-dlp open and block Decky's reinstall extract.
             self.node_process = subprocess.Popen(
                 [NODE_BIN, SERVER_JS],
                 cwd=PLUGIN_DIR,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 env={**os.environ, "NODE_ENV": "production"},
+                start_new_session=True,
             )
 
             # Wait for READY signal (with timeout)
-            import asyncio
             loop = asyncio.get_running_loop()
 
             def wait_for_ready():
@@ -58,9 +63,7 @@ class Plugin:
                     logger.error("Backend process ended before signaling READY.")
             except asyncio.TimeoutError:
                 logger.error("Backend did not signal READY within 30 seconds.")
-                if self.node_process:
-                    self.node_process.kill()
-                    self.node_process = None
+                await self._terminate_process_group()
                 return
 
             # Continue reading stdout and stderr in background for logging
@@ -78,19 +81,58 @@ class Plugin:
         except Exception as e:
             logger.error(f"Failed to start backend: {e}")
 
+    async def _terminate_process_group(self):
+        """Kill the Node process group (Node + any children like yt-dlp)
+        with bounded, non-blocking waits. Safe to call on already-dead procs."""
+        if not self.node_process:
+            return
+
+        pid = self.node_process.pid
+        loop = asyncio.get_running_loop()
+
+        try:
+            pgid = os.getpgid(pid)
+        except ProcessLookupError:
+            self.node_process = None
+            return
+
+        # SIGTERM the whole group, give it 2s to clean up
+        try:
+            os.killpg(pgid, signal.SIGTERM)
+        except ProcessLookupError:
+            self.node_process = None
+            return
+
+        try:
+            await asyncio.wait_for(
+                loop.run_in_executor(None, self.node_process.wait),
+                timeout=2.0,
+            )
+            self.node_process = None
+            return
+        except asyncio.TimeoutError:
+            logger.warning("Backend did not stop gracefully, force-killing process group...")
+
+        # SIGKILL fallback — give it 3s to actually exit (normally instant)
+        try:
+            os.killpg(pgid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+
+        try:
+            await asyncio.wait_for(
+                loop.run_in_executor(None, self.node_process.wait),
+                timeout=3.0,
+            )
+        except asyncio.TimeoutError:
+            logger.error("Backend process did not exit even after SIGKILL")
+        finally:
+            self.node_process = None
+
     async def _unload(self):
         logger.info("Stopping YouTube Cast Receiver backend...")
-        if self.node_process:
-            try:
-                self.node_process.send_signal(signal.SIGTERM)
-                try:
-                    self.node_process.wait(timeout=2)
-                except subprocess.TimeoutExpired:
-                    logger.warning("Backend did not stop gracefully, killing...")
-                    self.node_process.kill()
-                    self.node_process.wait()
-            except Exception as e:
-                logger.error(f"Error stopping backend: {e}")
-            finally:
-                self.node_process = None
+        try:
+            await self._terminate_process_group()
+        except Exception as e:
+            logger.error(f"Error stopping backend: {e}")
         logger.info("Backend stopped.")

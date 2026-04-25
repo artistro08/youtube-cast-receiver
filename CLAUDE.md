@@ -64,7 +64,7 @@ Backend tests only (frontend depends on Decky SDK/Steam CEF):
 
 ## Deployment
 
-After building, copy `youtube-cast-receiver.zip` to `D:/` for transfer to Steam Deck. Must **uninstall** existing plugin before reinstalling (the old Node.js process holds port 39281).
+After building, copy `youtube-cast-receiver.zip` to `D:/` for transfer to Steam Deck. Reinstall on top of an existing install works as of v0.3.0 — `main.py` kills the entire Node process group (including orphaned `yt-dlp` children) so Decky's extract step doesn't hit `ETXTBSY` on busy executables.
 
 ## Gotchas
 

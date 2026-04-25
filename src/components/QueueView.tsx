@@ -29,7 +29,7 @@ export const QueueView = () => {
           <div style={{ marginBottom: '8px' }}><FaMusic size={32} /></div>
           <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>Queue is Empty</div>
           <div style={{ fontSize: '12px', lineHeight: '1.4' }}>
-            Cast a video from <strong>YouTube</strong> on your phone to start playing.
+            Cast a video from <strong>YouTube Music</strong> or <strong>YouTube</strong> to start playing.
           </div>
         </div>
       </Section>

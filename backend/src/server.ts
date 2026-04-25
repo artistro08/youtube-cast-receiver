@@ -203,15 +203,42 @@ async function main() {
   // Signal readiness to main.py
   console.log('READY');
 
-  // Graceful shutdown
+  // Graceful shutdown.
+  // Decky reinstalls block on extractall() if our binaries (bin/node,
+  // bin/yt-dlp) are still being executed. The Python wrapper kills the
+  // whole process group on _unload, but we also enforce a hard upper
+  // bound here so a misbehaving receiver.stop() can't keep us alive.
+  const SHUTDOWN_HARD_LIMIT_MS = 1500;
+  const RECEIVER_STOP_LIMIT_MS = 1000;
+  let shuttingDown = false;
   const shutdown = async () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
     console.log('[YTCast] Shutting down...');
-    if (receiverEnabled) {
-      await receiver.stop();
+
+    // Fail-safe: force exit if cleanup hangs. .unref() lets us exit
+    // cleanly via process.exit(0) below if cleanup completes in time.
+    const failSafe = setTimeout(() => {
+      console.error('[YTCast] Shutdown timed out, forcing exit');
+      process.exit(1);
+    }, SHUTDOWN_HARD_LIMIT_MS);
+    failSafe.unref();
+
+    try {
+      if (receiverEnabled) {
+        // Race against a 1s timer — yt-cast-receiver's stop() can hang
+        // on flaky network conditions during SSDP teardown.
+        await Promise.race([
+          receiver.stop(),
+          new Promise<void>((resolve) => setTimeout(resolve, RECEIVER_STOP_LIMIT_MS)),
+        ]);
+      }
+      await dataStore.flush();
+      wsManager.close();
+      httpServer.close();
+    } catch (err) {
+      console.error('[YTCast] Error during shutdown:', err);
     }
-    await dataStore.flush();
-    wsManager.close();
-    httpServer.close();
     process.exit(0);
   };
 
