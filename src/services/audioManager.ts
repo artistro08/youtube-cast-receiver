@@ -17,18 +17,7 @@ let currentTrack: TrackInfo | null = null;
 let isPlaying = false;
 let currentVolume = 100;
 let connected = false;
-
-export interface NetworkInfo {
-  uuid: string | null;
-  name: string | null;
-  trusted: boolean;
-}
-
-let networkInfo: NetworkInfo = {
-  uuid: null,
-  name: null,
-  trusted: false,
-};
+let receiverEnabled = false;
 
 // Suppression window for local volume changes (ms).
 // WS echoes arriving within this window after a local change are ignored.
@@ -51,7 +40,7 @@ type VolumeListener = (volume: number) => void;
 type PositionListener = (position: number, duration: number) => void;
 type ConnectionListener = (connected: boolean) => void;
 type QueueListener = (tracks: any[], position: number) => void;
-type NetworkListener = (info: NetworkInfo) => void;
+type ReceiverStatusListener = (enabled: boolean) => void;
 
 let trackListeners: TrackListener[] = [];
 let playStateListeners: PlayStateListener[] = [];
@@ -59,7 +48,7 @@ let volumeListeners: VolumeListener[] = [];
 let positionListeners: PositionListener[] = [];
 let connectionListeners: ConnectionListener[] = [];
 let queueListeners: QueueListener[] = [];
-let networkListeners: NetworkListener[] = [];
+let receiverStatusListeners: ReceiverStatusListener[] = [];
 
 export function addTrackListener(fn: TrackListener): () => void {
   trackListeners.push(fn);
@@ -91,9 +80,9 @@ export function addQueueListener(fn: QueueListener): () => void {
   return () => { queueListeners = queueListeners.filter((l) => l !== fn); };
 }
 
-export function addNetworkListener(fn: NetworkListener): () => void {
-  networkListeners.push(fn);
-  return () => { networkListeners = networkListeners.filter((l) => l !== fn); };
+export function addReceiverStatusListener(fn: ReceiverStatusListener): () => void {
+  receiverStatusListeners.push(fn);
+  return () => { receiverStatusListeners = receiverStatusListeners.filter((l) => l !== fn); };
 }
 
 // --- Getters ---
@@ -102,7 +91,7 @@ export function getCurrentTrack(): TrackInfo | null { return currentTrack; }
 export function getIsPlaying(): boolean { return isPlaying; }
 export function getVolume(): number { return currentVolume; }
 export function getIsConnected(): boolean { return connected; }
-export function getNetworkInfo(): NetworkInfo { return networkInfo; }
+export function getReceiverEnabled(): boolean { return receiverEnabled; }
 export function getPosition(): number {
   return audioElement ? audioElement.currentTime : 0;
 }
@@ -153,9 +142,9 @@ function notifyQueue(tracks: any[], position: number) {
   queueListeners.forEach((fn) => fn(tracks, position));
 }
 
-function notifyNetwork(info: NetworkInfo) {
-  networkInfo = info;
-  networkListeners.forEach((fn) => fn(info));
+export function notifyReceiverStatus(enabled: boolean) {
+  receiverEnabled = enabled;
+  receiverStatusListeners.forEach((fn) => fn(enabled));
 }
 
 // --- WebSocket ---
@@ -189,8 +178,8 @@ function connectWebSocket() {
     void apiGetQueue().then((data) => {
       if (data) notifyQueue(data.tracks ?? [], data.position ?? -1);
     });
-    void apiGetNetwork().then((data) => {
-      if (data && typeof data.trusted === 'boolean') notifyNetwork(data as NetworkInfo);
+    void apiGetReceiverStatus().then((data) => {
+      if (data?.enabled !== undefined) notifyReceiverStatus(data.enabled);
     });
   };
 
@@ -307,14 +296,6 @@ function handleWsMessage(msg: { event: string; data: any }) {
       break;
     }
 
-    case 'network': {
-      notifyNetwork({
-        uuid: msg.data.uuid ?? null,
-        name: msg.data.name ?? null,
-        trusted: !!msg.data.trusted,
-      });
-      break;
-    }
 
     case 'error': {
       console.error('[YTCast] Backend error:', msg.data.message, msg.data.code);
@@ -415,9 +396,9 @@ export async function apiSeek(position: number) { return apiPost('/api/seek', { 
 export async function apiSetVolume(volume: number) { return apiPost('/api/volume', { volume }); }
 export async function apiGetState() { return apiGet('/api/state'); }
 export async function apiGetQueue() { return apiGet('/api/queue'); }
-export async function apiGetNetwork() { return apiGet('/api/network/current'); }
-export async function apiTrustNetwork() { return apiPost('/api/network/trust'); }
-export async function apiUntrustNetwork() { return apiPost('/api/network/untrust'); }
+export async function apiGetReceiverStatus() { return apiGet('/api/receiver/status'); }
+export async function apiReceiverEnable() { return apiPost('/api/receiver/enable'); }
+export async function apiReceiverDisable() { return apiPost('/api/receiver/disable'); }
 
 export function togglePlayback() {
   if (isPlaying) {
@@ -491,5 +472,5 @@ export function destroyAudio() {
   positionListeners = [];
   connectionListeners = [];
   queueListeners = [];
-  networkListeners = [];
+  receiverStatusListeners = [];
 }

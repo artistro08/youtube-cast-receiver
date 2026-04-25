@@ -6,9 +6,8 @@ import { IoPlay, IoPlaySkipBack, IoPlaySkipForward } from 'react-icons/io5';
 import { usePlayer } from '../context/PlayerContext';
 import {
   togglePlayback, apiNext, apiPrev,
-  getNetworkInfo, addNetworkListener,
-  apiTrustNetwork, apiUntrustNetwork,
-  type NetworkInfo,
+  getReceiverEnabled, addReceiverStatusListener, notifyReceiverStatus,
+  apiReceiverEnable, apiReceiverDisable,
 } from '../services/audioManager';
 import { Section } from './Section';
 import { VolumeSlider } from './VolumeSlider';
@@ -52,22 +51,18 @@ const transBtnLast: React.CSSProperties = { ...btnBase, height: '33px', borderRa
 
 export const PlayerView = () => {
   const { track, isPlaying, connected } = usePlayer();
-  const [network, setNetwork] = useState<NetworkInfo>(getNetworkInfo());
+  const [receiverEnabled, setReceiverEnabled] = useState(getReceiverEnabled());
 
-  useEffect(() => addNetworkListener(setNetwork), []);
+  useEffect(() => addReceiverStatusListener(setReceiverEnabled), []);
 
-  const handleTrustToggle = async (trusted: boolean) => {
-    setNetwork({ ...network, trusted });
-    if (trusted) {
-      await apiTrustNetwork();
+  const handleReceiverToggle = async (enabled: boolean) => {
+    notifyReceiverStatus(enabled); // optimistic, also updates module-level state
+    if (enabled) {
+      await apiReceiverEnable();
     } else {
-      await apiUntrustNetwork();
+      await apiReceiverDisable();
     }
   };
-
-  const trustDescription = network.name
-    ? `Currently on "${network.name}". Receiver runs only on trusted networks.`
-    : 'No network detected';
 
   const albumArt = track?.albumArt;
   const title = track?.title ?? (connected ? 'Waiting for cast...' : 'Not connected');
@@ -132,13 +127,12 @@ export const PlayerView = () => {
         <VolumeSlider />
       </Section>
 
-      {/* Trust this network toggle — receiver runs while connected to a trusted network */}
+      {/* Receiver toggle — start/stop SSDP advertising */}
       <Section>
         <PaddedToggle
-          label="Trust this network"
-          description={trustDescription}
-          checked={network.trusted}
-          onChange={(v) => { void handleTrustToggle(v); }}
+          label="Receiver Enabled"
+          checked={receiverEnabled}
+          onChange={(v) => { void handleReceiverToggle(v); }}
         />
       </Section>
     </>
