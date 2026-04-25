@@ -245,23 +245,31 @@ export class CastPlayer extends Player {
       this.currentDuration = info.duration;
       this.playing = true;
 
-      this.ws.broadcast('track', {
-        videoId: info.videoId,
-        title: info.title,
-        artist: info.artist,
-        albumArt: info.albumArt,
-        duration: info.duration,
-        url: info.url,
-      });
-      console.log(`[YTCast] Playing: ${info.title} by ${info.artist} (${info.videoId})`);
+      // Defer track broadcast to next macrotask so a follow-up doPause
+      // (which fires when phone connects in paused state) flips this.playing
+      // before we tell the frontend whether to autoplay. Library calls
+      // `await doPlay; await doPause` — microtasks drain between them, but
+      // setTimeout(0) runs after both settle.
+      setTimeout(() => {
+        this.ws.broadcast('track', {
+          videoId: info.videoId,
+          title: info.title,
+          artist: info.artist,
+          albumArt: info.albumArt,
+          duration: info.duration,
+          url: info.url,
+          autoplay: this.playing,
+        });
+        console.log(`[YTCast] Loaded: ${info.title} by ${info.artist} (${info.videoId}) autoplay=${this.playing}`);
 
-      if (position > 0) {
-        this.ws.broadcast('seek', { position });
-      }
+        if (position > 0) {
+          this.ws.broadcast('seek', { position });
+        }
 
-      // Broadcast updated queue so the current track indicator moves
-      const queueData = this.getQueueWithMetadata();
-      this.ws.broadcast('queue', queueData);
+        // Broadcast updated queue so the current track indicator moves
+        const queueData = this.getQueueWithMetadata();
+        this.ws.broadcast('queue', queueData);
+      }, 0);
 
       return true;
     } catch (err) {

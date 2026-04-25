@@ -222,16 +222,23 @@ function handleWsMessage(msg: { event: string; data: any }) {
       };
       notifyTrack(info);
 
-      // Load audio URL
+      // Load audio URL. Backend sets autoplay=false when the phone connects
+      // in paused state — preload only, don't start playback. Default true
+      // for backward compat if the field is missing.
       if (audioElement && msg.data.url) {
         audioElement.src = msg.data.url;
-        void audioElement.play().then(() => {
-          notifyPlayState(true);
-          startProgressReporting();
-        }).catch((e) => {
-          console.error('[YTCast] Audio play failed:', e);
-          sendWs('playbackError', { message: String(e) });
-        });
+        const shouldAutoplay = msg.data.autoplay !== false;
+        if (shouldAutoplay) {
+          void audioElement.play().then(() => {
+            notifyPlayState(true);
+            startProgressReporting();
+          }).catch((e) => {
+            console.error('[YTCast] Audio play failed:', e);
+            sendWs('playbackError', { message: String(e) });
+          });
+        } else {
+          notifyPlayState(false);
+        }
       }
       break;
     }

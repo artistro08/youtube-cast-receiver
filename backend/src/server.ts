@@ -69,12 +69,14 @@ async function main() {
   });
 
   // Receiver on/off control (start = advertise on network, stop = go dark)
-  let receiverEnabled = false; // true after receiver.start() below
+  // Persisted across reboots via dataStore. Default disabled — user opts in via toggle.
+  let receiverEnabled = false;
   const receiverControl = {
     enable: async () => {
       if (!receiverEnabled) {
         await receiver.start();
         receiverEnabled = true;
+        await dataStore.set('receiver.enabled', true);
         console.log('[YTCast] Cast receiver enabled (advertising on network)');
       }
     },
@@ -82,6 +84,7 @@ async function main() {
       if (receiverEnabled) {
         await receiver.stop();
         receiverEnabled = false;
+        await dataStore.set('receiver.enabled', false);
         console.log('[YTCast] Cast receiver disabled (no longer advertising)');
       }
     },
@@ -186,10 +189,16 @@ async function main() {
     });
   });
 
-  // Start the cast receiver (DIAL/SSDP advertisement)
-  await receiver.start();
-  receiverEnabled = true;
-  console.log(`[YTCast] Cast receiver started. Device name: "${deviceName}"`);
+  // Start the cast receiver only if user has enabled it (persisted in dataStore).
+  // Default is disabled — user must toggle on via the player page.
+  const persistedEnabled = await dataStore.get<boolean>('receiver.enabled');
+  if (persistedEnabled === true) {
+    await receiver.start();
+    receiverEnabled = true;
+    console.log(`[YTCast] Cast receiver started (persisted enabled). Device name: "${deviceName}"`);
+  } else {
+    console.log(`[YTCast] Cast receiver disabled at startup (toggle on to advertise). Device name: "${deviceName}"`);
+  }
 
   // Signal readiness to main.py
   console.log('READY');
@@ -197,7 +206,9 @@ async function main() {
   // Graceful shutdown
   const shutdown = async () => {
     console.log('[YTCast] Shutting down...');
-    await receiver.stop();
+    if (receiverEnabled) {
+      await receiver.stop();
+    }
     await dataStore.flush();
     wsManager.close();
     httpServer.close();
