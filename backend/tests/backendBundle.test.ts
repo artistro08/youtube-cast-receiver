@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { execSync, spawnSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { delimiter, dirname, extname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -41,17 +41,21 @@ describe('packaged backend module format', () => {
   });
 
   it('parses the real bundle under the packaged root type:module', () => {
+    expect(pkg.type).toBe('module');
     const result = spawnSync(process.execPath, ['--check', bundle], { encoding: 'utf8' });
-    expect(result.stderr).toBe('');
-    expect(result.status).toBe(0);
+    expect(result.error).toBeUndefined();
+    expect(result.status, result.stderr).toBe(0);
   });
 
-  it('reproduces the Gate await syntax failure when the same bundle is named .js', () => {
-    const legacyBundle = join(dirname(bundle), 'server.js');
-    if (legacyBundle !== bundle) copyFileSync(bundle, legacyBundle);
-    const result = spawnSync(process.execPath, ['--check', legacyBundle], { encoding: 'utf8' });
-    expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain('Gate.prototype.await = function await(callback)');
-    expect(result.stderr).toContain('SyntaxError: Unexpected reserved word');
+  it('loads CommonJS globals only with a .cjs extension under type:module', () => {
+    // Execute a dependency-free fixture: --check alone accepts CommonJS globals in ESM.
+    const source = "module.exports = require('node:path').sep;\n";
+    for (const [extension, status] of [['cjs', 0], ['js', 1]] as const) {
+      const fixture = join(dirname(bundle), `commonjs-fixture.${extension}`);
+      writeFileSync(fixture, source);
+      const result = spawnSync(process.execPath, [fixture], { encoding: 'utf8' });
+      expect(result.error).toBeUndefined();
+      expect(result.status, result.stderr).toBe(status);
+    }
   });
 });
