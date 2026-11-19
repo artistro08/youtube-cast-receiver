@@ -11,7 +11,7 @@ logger = logging.getLogger("YTCast")
 PLUGIN_DIR = os.path.dirname(os.path.realpath(__file__))
 NODE_BIN_SRC = os.path.join(PLUGIN_DIR, "bin", "node")
 YTDLP_BIN_SRC = os.path.join(PLUGIN_DIR, "bin", "yt-dlp")
-SERVER_JS = os.path.join(PLUGIN_DIR, "backend", "out", "server.js")
+SERVER_CJS = os.path.join(PLUGIN_DIR, "backend", "out", "server.cjs")
 
 # Execute binaries from /tmp instead of from inside the plugin folder.
 # Linux returns ETXTBSY if you try to overwrite an executable that's
@@ -69,7 +69,7 @@ class Plugin:
                 "YTCAST_YTDLP_PATH": YTDLP_BIN,
             }
             self.node_process = subprocess.Popen(
-                [NODE_BIN, SERVER_JS],
+                [NODE_BIN, SERVER_CJS],
                 cwd=PLUGIN_DIR,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,

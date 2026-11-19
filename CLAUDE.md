@@ -7,7 +7,7 @@ YouTube Cast Receiver — a Decky Loader plugin for Steam Deck that acts as a Yo
 ## Architecture
 
 - **Frontend**: React/TypeScript using `@decky/ui` and `@decky/api`. Bundled with Rollup (`pnpm run build` → `dist/index.js`).
-- **Backend**: Node.js/TypeScript using `yt-cast-receiver` for the cast protocol. Bundled with esbuild as **CJS** (not ESM — `peer-dial` uses `await` as a method name which breaks ESM strict mode). Output: `backend/out/server.js`.
+- **Backend**: Node.js/TypeScript using `yt-cast-receiver` for the cast protocol. Bundled with esbuild as **CJS** (not ESM — `peer-dial` depends on `gate`, which names a function `await`, a reserved word in modules). Output: `backend/out/server.cjs`.
 - **Process management**: Python `main.py` is the Decky entry point. It spawns the Node.js backend as a subprocess and waits for a `READY` signal on stdout.
 - **Communication**: HTTP REST on `127.0.0.1:39281` for commands (play/pause/next/prev/seek/volume). WebSocket on the same port for real-time state push.
 
@@ -34,14 +34,14 @@ YouTube Cast Receiver — a Decky Loader plugin for Steam Deck that acts as a Yo
 - `main.py` — Python shim for Decky. Spawns/kills Node.js.
 - `build.ps1` — PowerShell build script. Downloads Node.js + yt-dlp Linux binaries, packages ZIP.
 - `backend/xml/` — DIAL XML templates copied from `peer-dial` (needed at runtime because esbuild changes `__dirname`).
-- `backend/out/package.json` — `{"type":"commonjs"}` override so Node.js loads the CJS bundle correctly despite root `"type":"module"`.
+- `backend/out/server.cjs` — Explicit CommonJS extension so Node.js loads the bundle correctly despite root `"type":"module"`; no nested package.json override is needed.
 
 ## Build Commands
 
 ```bash
 pnpm install              # Install dependencies
 pnpm run build            # Build frontend (Rollup → dist/index.js)
-pnpm run build:backend    # Build backend (esbuild → backend/out/server.js)
+pnpm run build:backend    # Build backend (esbuild → backend/out/server.cjs)
 pnpm test                 # Run backend tests (vitest)
 pnpm run package          # Full build + download binaries + ZIP (calls build.ps1)
 ```
@@ -49,7 +49,7 @@ pnpm run package          # Full build + download binaries + ZIP (calls build.ps
 ## Important Patterns
 
 - **yt-dlp must be spawned with clean environment**: `{ env: { ...process.env, LD_LIBRARY_PATH: '', PYTHONPATH: '' } }`. Without this, Decky's `LD_LIBRARY_PATH` overrides PyInstaller's bundled OpenSSL and yt-dlp crashes.
-- **CJS bundle, not ESM**: The `peer-dial` dependency (via `yt-cast-receiver`) uses `await` as a method name in the `gate` package, which is a syntax error in ESM strict mode. Backend must be `--format=cjs`.
+- **CJS bundle**: The `peer-dial` dependency (via `yt-cast-receiver`) depends on `gate`, which names a function `await`, a reserved word in modules. Backend must use both `--format=cjs` and the `.cjs` extension; a `.js` file inherits the root package's `"type":"module"` even when its contents are CommonJS.
 - **Volume bypasses React context**: To prevent feedback loops between phone and Deck volume controls, VolumeSlider subscribes directly to audioManager — not through PlayerContext.
 - **SSDP UUID is persisted**: Stored in DataStore (`ssdp.uuid`) so the device looks the same across reinstalls. Without this, each reinstall creates a duplicate entry in the YouTube cast list.
 - **Queue is sender-controlled**: The `yt-cast-receiver` library owns the queue. No public API to jump to arbitrary indices or remove items. Queue jumping works by constructing a Video object from the current video's client.

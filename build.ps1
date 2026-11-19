@@ -100,7 +100,9 @@ New-Item -ItemType Directory -Path $PluginDir | Out-Null
 
 # Copy required files
 Copy-Item (Join-Path $ScriptDir "dist") (Join-Path $PluginDir "dist") -Recurse
-Copy-Item (Join-Path $ScriptDir "backend/out") (Join-Path $PluginDir "backend/out") -Recurse
+# Copy only the current bundle so stale server.js/package.json files stay out of the ZIP.
+New-Item -ItemType Directory -Path (Join-Path $PluginDir "backend/out") -Force | Out-Null
+Copy-Item (Join-Path $ScriptDir "backend/out/server.cjs") (Join-Path $PluginDir "backend/out/server.cjs")
 Copy-Item (Join-Path $ScriptDir "backend/xml") (Join-Path $PluginDir "backend/xml") -Recurse
 Copy-Item $BinDir (Join-Path $PluginDir "bin") -Recurse
 Copy-Item (Join-Path $ScriptDir "package.json") (Join-Path $PluginDir "package.json")
